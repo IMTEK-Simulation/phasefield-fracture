@@ -18,12 +18,10 @@ def constrained_conjugate_gradients(x_in,A,b,field_constraint, comm, maxiter = 2
     for i in range (1, maxiter+1):
         Ap = A(p)
         denominator_temp =  comm.allreduce((p*Ap).sum(),MPI.SUM)
-#        print(denominator_temp)
         alpha = - comm.allreduce((r * p).sum(),MPI.SUM) / denominator_temp    # Vollebregt step 4, modified per Eq. 16
         x += alpha*p
-        mask_neg = x <= 0   # Vollebregt step 5
+        mask_neg = x <= field_constraint   # Vollebregt step 5
         x[mask_neg] = np.copy(field_constraint[mask_neg])
-#        print(i)
         assert np.logical_not(np.isnan(x).any())
         r_old = r   # Vollebregt step 6
         r = A(x) - b

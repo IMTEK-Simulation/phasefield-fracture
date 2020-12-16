@@ -61,8 +61,8 @@ def iteration(obj,perfobj):
             jsonfile.close()
 
 def run_test(obj,perfobj):
-    nmax = 21
-    avg_strain_all = np.linspace(0.07,0.08,num=nmax)
+    nmax = 41
+    avg_strain_all = np.linspace(0.07,0.11,num=nmax)
     obj.strain_step = avg_strain_all[1] - avg_strain_all[0]
     if(obj.comm.rank == 0):
         print(avg_strain_all)
@@ -116,7 +116,7 @@ def plot_comp_en(x,y1,y2,title):
 p = perfstats()
 f = parallel_fracture.parallel_fracture()
 f.penalty_coeff = 0
-f.delta_energy_tol = 1e-4
+f.delta_energy_tol = 1e-5
 f.phi_newton_tol = 1e-6
 f.cg_tol = 1e-7
 f.title = 'test'

@@ -46,7 +46,7 @@ class parallel_fracture():
         self.phi_old = self.phi.array() + 0.0
         
         self.delta_energy_tol = 1e-6
-        self.solver_tol = 1e-8
+        self.solver_tol = 1e-12
         self.ksmall = 1e-4
         self.maxiter_cg = 40000
         ### initialize strain calculation result and energy

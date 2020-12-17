@@ -4,7 +4,7 @@ import numpy as np
 ## Code uses the algorithm discussed in Vollebregt (2014) (BCCG) with the Polak-Ribiere
 ## update formula in Eq. 16.  It enforces the constraint x >= field_constraint
 
-def constrained_conjugate_gradients(x_in,A,b,field_constraint, comm, maxiter = 20000, cg_tol = 1e-10):
+def constrained_conjugate_gradients(x_in,A,b,field_constraint, comm, maxiter = 20000, cg_tol = 1e-10, verbose=False):
 
     x = np.copy(x_in)
     r = A(x) - b
@@ -29,10 +29,10 @@ def constrained_conjugate_gradients(x_in,A,b,field_constraint, comm, maxiter = 2
         mask_bounded = np.logical_and(mask_neg,mask_res)
         r[mask_bounded] = 0.0
         rmax = comm.allreduce(np.max(abs(r)),MPI.MAX)
-        if (comm.rank == 0):
+        if ((comm.rank == 0) and (verbose)):
             print('Iteration {}, max residual is {}'.format(i+1, rmax))
         if(rmax <= cg_tol):
-            if (comm.rank == 0):
+            if ((comm.rank == 0) and (verbose)):
                 print('CG converged after {} iterations with max residual {}'.format(i+1, rmax))
             return x
         beta =  comm.allreduce((r*(r - r_old)).sum(),MPI.SUM) / (alpha*denominator_temp) # Vollebregt step 3, modified per Eq. 16

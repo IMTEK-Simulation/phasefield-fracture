@@ -7,7 +7,7 @@ mu_build_path = "/Users/andrews/code/muspectre/build"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
-sys.path.append('/Users/andrews/code/muspectre_misc/parallel2D/src/')
+sys.path.append("../src/")
 
 #import NewtonCG
 from constrainedCG import constrained_conjugate_gradients
@@ -123,68 +123,36 @@ class parallel_fracture():
         return return_arr*self.fftengine.normalisation**2
         
     def energy_density(self,x):
-      #  return (1.0-x)**2*self.straineng + 0.5*x**2 + 0.5*self.grad2(x)
         return (1.0-x)**2*self.straineng + x + 0.5*self.grad2(x)
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
         
     def objective(self,x):
-     #   penalty = self.penalty_coeff*0.5*np.minimum(x-self.phi_old,0)**2
-     #   return self.integrate(penalty + self.energy_density(x))
         return self.integrate(self.energy_density(x))
 
     def jacobian(self,x):
-    #    penalty = self.penalty_coeff*np.minimum(x-self.phi_old,0)
-    #    return 2*(x-1.0)*self.straineng + penalty + np.heaviside(x,0) - self.laplacian(x) # original case
-    #    return 2*(x-1.0)*self.straineng + x - self.laplacian(x) # working case
         return 2*(x-1.0)*self.straineng + 1.0 - self.laplacian(x)
 
     def hessp(self,p):
-     #   penalty = self.penalty_coeff*np.heaviside(p-self.phi_old,0)
-     #   return (2.0*self.straineng + penalty)*p - self.laplacian(p)  # original case
-     #   return (2.0*self.straineng + 1.0)*p - self.laplacian(p)  # working case
         return 2.0*self.straineng*p - self.laplacian(p) 
 
-### wrappers
     def phi_solver(self):
         self.get_straineng()
-#        print(self.straineng)
-#        import matplotlib.pyplot as plt
-#        if (self.comm.rank == 0):
-#            plt.pcolor(self.straineng)
-#            #plt.pcolor(obj.straineng)
-#            plt.colorbar()
-#            plt.axis('square')
-#            plt.show()
- #       self.phi.array()[...] = NewtonCG.parallelNewtonCG(self.phi,self.jacobian,self.hessp, self.comm)
         Jx = -self.jacobian(self.phi.array())
         update = constrained_conjugate_gradients(Jx, self.hessp, Jx,
                                  self.phi_old - self.phi.array(), self.comm)
         self.phi.array()[...] += update
-  #      res_check1 = self.hessp(update)
-  #      res_check2 = self.jacobian(self.phi.array())
-  #      if(self.comm.rank == 0):
-  #          print(self.straineng)
-  #          print(self.phi.array())
-  #          print(update)
-  #          print(res_check1)
-  #          print(res_check2)
            
                                  
   # currently broken, in the name of progress          
     def crappyIO(self,fname):  ## will replace this with a real parallel IO at some point
         np.save(fname+'rank{:02d}'.format(self.comm.rank),self.phi)
     
-#    def muIO(self):
-#        file_io_object = muGrid.FileIONetCDF(
-#            "testfile.nc", muGrid.FileIONetCDF.OpenMode.Write, self.comm)
-#        file_io_object.register_field_collection(self.fc_glob)
-#        file_frame = file_io_object.append_frame()
-#        file_frame.write()
-#        file_io_object.close()
-
-#obj = testclass()
-#obj.get_straineng()
-#print(obj.Cx.array())
-#print(obj.straineng)
+    def muIO(self):
+        file_io_object = muGrid.FileIONetCDF(
+            "testfile.nc", muGrid.FileIONetCDF.OpenMode.Write, self.comm)
+        file_io_object.register_field_collection(self.fc_glob)
+        file_frame = file_io_object.append_frame()
+        file_frame.write()
+        file_io_object.close()

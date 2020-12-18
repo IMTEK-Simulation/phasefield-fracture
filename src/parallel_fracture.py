@@ -38,7 +38,9 @@ class parallel_fracture():
         self.fourier_gradient = [msp.FourierDerivative(self.dim , i) for i in range(self.dim)]
         
         self.fc_glob = muGrid.GlobalFieldCollection(self.dim)
-        self.fc_glob.initialise(self.nb_grid_pts, self.fftengine.nb_subdomain_grid_pts)
+        self.fc_glob.initialise(self.nb_grid_pts,
+                self.fftengine.nb_subdomain_grid_pts,
+                self.fftengine.subdomain_locations)
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.strain = self.fc_glob.register_real_field("strain", (2,2))

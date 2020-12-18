@@ -33,7 +33,6 @@ class parallel_fracture():
 
         self.fftengine = muFFT.FFT(self.nb_grid_pts,fft='fftwmpi',communicator=self.comm)
         self.fourier_buffer   = self.fftengine.register_fourier_space_field("fourier-space", 1)
-        self.straineng        = np.zeros(self.fftengine.nb_subdomain_grid_pts)
         self.x0               = np.zeros(self.fftengine.nb_subdomain_grid_pts)
         self.fourier_gradient = [msp.FourierDerivative(self.dim , i) for i in range(self.dim)]
         
@@ -44,6 +43,7 @@ class parallel_fracture():
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.strain = self.fc_glob.register_real_field("strain", (2,2))
+        self.straineng = self.fc_glob.register_real_field("straineng", 1)
         self.initialize_parallel_field()
         self.phi_old = self.phi.array() + 0.0
         self.cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
@@ -89,14 +89,15 @@ class parallel_fracture():
     def strain_solver(self):            
         ### set current material properties
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
-            pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
+            pixel_id = pixel[1]+pixel[0]*self.fftengine.nb_subdomain_grid_pts[1]
+            #temp = self.material.get_youngs_modulus(pixel_id)
             self.material.set_youngs_modulus(pixel_id,
                    Cxval*(1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall)
+        
         ### run muSpectre computation
         verbose = msp.Verbosity.Silent
         solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
-        return msp.solvers.newton_cg(self.cell, self.F_tot, solver, 
-            self.solver_tol, self.solver_tol, verbose)
+        return msp.solvers.newton_cg(self.cell, self.F_tot, solver, self.solver_tol, self.solver_tol, verbose)
     
 ### key parts of test system
     def get_straineng(self):
@@ -105,10 +106,11 @@ class parallel_fracture():
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
             strain = np.reshape(self.strain_result.grad[pixel_id*4:(pixel_id+1)*4],(2,2))
+            self.strain.array()[:,:,0,pixel[0],pixel[1]] = strain
             trace = 0.0
             for k in range(0,self.dim):
                 trace += strain[k,k]
-            self.straineng[tuple(pixel)] = 0.5*self.Cx.array()[tuple(pixel)]*(2.0*mu_fact*(strain**2).sum() 
+            self.straineng.array()[tuple(pixel)] = 0.5*self.Cx.array()[tuple(pixel)]*(2.0*mu_fact*(strain**2).sum() 
                 + lamb_fact*self.Cx.array()[tuple(pixel)]*trace**2)
 
     def laplacian(self,x):
@@ -130,7 +132,7 @@ class parallel_fracture():
         return return_arr*self.fftengine.normalisation**2
         
     def energy_density(self,x):
-        return (1.0-x)**2*self.straineng + x + 0.5*self.grad2(x)
+        return (1.0-x)**2*self.straineng.array() + x + 0.5*self.grad2(x)
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
@@ -139,10 +141,10 @@ class parallel_fracture():
         return self.integrate(self.energy_density(x))
 
     def jacobian(self,x):
-        return 2*(x-1.0)*self.straineng + 1.0 - self.laplacian(x)
+        return 2*(x-1.0)*self.straineng.array() + 1.0 - self.laplacian(x)
 
     def hessp(self,p):
-        return 2.0*self.straineng*p - self.laplacian(p) 
+        return 2.0*self.straineng.array()*p - self.laplacian(p) 
 
     def phi_solver(self):
         self.get_straineng()

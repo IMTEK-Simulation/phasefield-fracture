@@ -27,7 +27,7 @@ class parallel_fracture():
         
         self.Young = 100.0
         self.Poisson = 0.0
-        self.penalty_coeff = 1e2
+        self.ksmall = 1e-4
         self.F_tot = np.array([[ 0.0,  0.0],
                   [ 0.0 , 0.00]])
 
@@ -42,20 +42,22 @@ class parallel_fracture():
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.strain = self.fc_glob.register_real_field("strain", (2,2))
-        self.initialize_parallel()
+        self.initialize_parallel_field()
         self.phi_old = self.phi.array() + 0.0
-        
+        self.cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
+            self.fourier_gradient,fft='fftwmpi',communicator=self.comm)
+        self.material = self.initialize_material()
+        self.cell.initialise()  #initialization of fft to make faster fft
+
         self.delta_energy_tol = 1e-6
         self.solver_tol = 1e-12
-        self.ksmall = 1e-4
         self.maxiter_cg = 40000
         ### initialize strain calculation result and energy
         self.strain_result = self.strain_solver()
         self.total_energy = self.objective(self.phi.array())
         
-        
 ### initialization of Cx
-    def initialize_parallel(self):
+    def initialize_parallel_field(self):
         for ind, val in np.ndenumerate(self.straineng):
             coords = (np.array(ind) + np.array(self.fftengine.subdomain_locations))*self.dx
             self.Cx.array()[ind] = self.init_function(coords)*self.Young
@@ -74,21 +76,24 @@ class parallel_fracture():
 #            val = 0.0
         return val
 
-### asdfasdfasdf
-    def strain_solver(self):            
-        ### setup cell and material
-        cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
-            self.fourier_gradient,fft='fftwmpi',communicator=self.comm)
-        mat = msp.material.MaterialLinearElastic4_2d.make(cell, "material_small") 
+    def initialize_material(self):
+        material = msp.material.MaterialLinearElastic4_2d.make(self.cell, "material_small")
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
-            mat.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)]*
+            material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)]*
                  (1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall, self.Poisson)
+        return material
+
+    def strain_solver(self):            
+        ### set current material properties
+        for pixel, Cxval in np.ndenumerate(self.Cx.array()):
+            pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
+            self.material.set_youngs_modulus(pixel_id,
+                   Cxval*(1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall)
         ### run muSpectre computation
         verbose = msp.Verbosity.Silent
-        solver = msp.solvers.KrylovSolverCG(cell, self.solver_tol, self.maxiter_cg, verbose)
-        cell.initialise()  #initialization of fft to make faster fft
-        return msp.solvers.newton_cg(cell, self.F_tot, solver, 
+        solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
+        return msp.solvers.newton_cg(self.cell, self.F_tot, solver, 
             self.solver_tol, self.solver_tol, verbose)
     
 ### key parts of test system

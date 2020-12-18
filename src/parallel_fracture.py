@@ -2,12 +2,12 @@ from mpi4py import MPI
 import sys
 import time
 import numpy as np
+import os
 
-mu_build_path = "/Users/andrews/code/muspectre/build"
+mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20201214/build/"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
-sys.path.append("../src/")
 
 #import NewtonCG
 from constrainedCG import constrained_conjugate_gradients
@@ -149,9 +149,16 @@ class parallel_fracture():
     def crappyIO(self,fname):  ## will replace this with a real parallel IO at some point
         np.save(fname+'rank{:02d}'.format(self.comm.rank),self.phi)
     
-    def muIO(self):
-        file_io_object = muGrid.FileIONetCDF(
-            "testfile.nc", muGrid.FileIONetCDF.OpenMode.Write, self.comm)
+    def muIO(self,fname,new=False):
+        comm = muGrid.Communicator(self.comm)
+        if (new):
+            if os.path.exists(fname):
+                os.remove(fname)
+            file_io_object = muGrid.FileIONetCDF(
+                fname, muGrid.FileIONetCDF.OpenMode.Write, comm)
+        else:
+            file_io_object = muGrid.FileIONetCDF(
+                fname, muGrid.FileIONetCDF.OpenMode.Append, comm)
         file_io_object.register_field_collection(self.fc_glob)
         file_frame = file_io_object.append_frame()
         file_frame.write()

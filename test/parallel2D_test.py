@@ -14,6 +14,7 @@ class statdump():
         self.subiterations = 0
         self.avg_strain = avg_strain
         self.total_energy = 0
+        self.elastic_energy = 0
         self.delta_phi = 0
         self.strain_time = 0
         self.phi_time = 0
@@ -54,7 +55,7 @@ def iteration(obj,statobj):
 
 def run_test(obj):
     nmax = 24
-    avg_strain_all = np.linspace(0.07,0.093,num=nmax)
+    avg_strain_all = np.linspace(0.05,0.073,num=nmax) #np.linspace(0.07,0.093,num=nmax)
     obj.strain_step = avg_strain_all[1] - avg_strain_all[0]
     if(obj.comm.rank == 0):
         print(avg_strain_all)
@@ -65,7 +66,7 @@ def run_test(obj):
     phi_time = np.zeros(nmax)
     obj.phi_old = obj.phi.array() + 0.0
     fieldoutputname = 'test.nc'
-    obj.muIO(fieldoutputname,new=True)
+    obj.muOutput(fieldoutputname,new=True)
     stats = statdump('stats.json',avg_strain_all[0])
     if(obj.comm.rank == 0): 
         stats.clear()
@@ -76,6 +77,7 @@ def run_test(obj):
         stats.avg_strain = avg_strain_all[n]
         stats.total_energy = obj.total_energy
         stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
+        stats.strain_energy = obj.integrate((1.0-obj.phi.array())**2*obj.straineng.array())
         delta_phi[n] = stats.delta_phi
         total_energy[n] = stats.total_energy 
         strain_time[n] = stats.strain_time
@@ -85,20 +87,25 @@ def run_test(obj):
         if(obj.comm.rank == 0):
             print('strain: ', avg_strain_all[n], 'energy: ',total_energy[n],'delta phi',delta_phi[n])
             stats.dump()
-        obj.muIO(fieldoutputname)
+        obj.muOutput(fieldoutputname)
         #obj.crappyIO('fields'+str(n).rjust(2,'0'))
+        if(stats.strain_energy < 1.0):
+            break
     
     if(obj.comm.rank == 0):
+        print('strain time:', np.sum(strain_time))
+        print('phi time:', np.sum(phi_time))
         np.save('total_energy',total_energy)
         np.save('delta_phi',delta_phi)
         np.save('avg_strain',avg_strain_all)
         np.save('strain_time',strain_time)
         np.save('phi_time',phi_time)
     
-f = parallel_fracture.parallel_fracture()
+f = parallel_fracture.parallel_fracture(Lx=10,nx=127)
 f.delta_energy_tol = 1e-6
-f.solver_tol = 1e-12
+f.solver_tol = 1e-10
 f.title = 'test'
+#f.initialize_serial('delta_phi.npy')
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')
     json.dump(f.__dict__,jsonfile,default=lambda o: "(array)")

@@ -18,7 +18,7 @@ import muFFT
 import muGrid
 
 class parallel_fracture():
-    def __init__(self, Lx = 10, nx = 63):
+    def __init__(self, Lx = 10, nx = 63, cfield=None):
         self.dim = 2
         self.lens = [Lx, Lx] #simulation cell lengths
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
@@ -42,9 +42,10 @@ class parallel_fracture():
                 self.fftengine.subdomain_locations)
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
+        self.initialize_parallel_Cx()
+        self.initialize_parallel_phi()
         self.strain = self.fc_glob.register_real_field("strain", (2,2))
         self.straineng = self.fc_glob.register_real_field("straineng", 1)
-        self.initialize_parallel_field()
         self.phi_old = self.phi.array() + 0.0
         self.cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
             self.fourier_gradient,fft='fftwmpi',communicator=self.comm)
@@ -52,31 +53,52 @@ class parallel_fracture():
         self.cell.initialise()  #initialization of fft to make faster fft
 
         self.delta_energy_tol = 1e-6
-        self.solver_tol = 1e-12
+        self.solver_tol = 1e-10
         self.maxiter_cg = 40000
         ### initialize strain calculation result and energy
         self.strain_result = self.strain_solver()
         self.total_energy = self.objective(self.phi.array())
         
 ### initialization of Cx
-    def initialize_parallel_field(self):
-        for ind, val in np.ndenumerate(self.straineng):
+    def initialize_parallel_Cx(self):
+        for ind, val in np.ndenumerate(self.Cx):
             coords = (np.array(ind) + np.array(self.fftengine.subdomain_locations))*self.dx
-            self.Cx.array()[ind] = self.init_function(coords)*self.Young
+            self.Cx.array()[ind] = self.init_function_Cx(coords)*self.Young
         
-    def init_function(self, coords):
+    def initialize_parallel_phi(self):
+        for ind, val in np.ndenumerate(self.Cx):
+            coords = (np.array(ind) + np.array(self.fftengine.subdomain_locations))*self.dx
+            self.phi.array()[ind] = self.init_function_phi(coords)
+
+    def init_function_Cx(self, coords):
         val = 1.0
-        distcoord = np.abs(coords - np.array(self.lens)/2)
-        dist = np.sqrt(np.sum(distcoord**2)) - self.dx[0]
-        if (dist < 1.0):
-            val = 0.5-0.25*np.cos(np.pi/2*(dist))
-        #if (dist < 1.0):
-        #    val = 0.0
-#        if (dist < 2.0**0.5):
-#            val = 1.0 - (1-dist/2**0.5)**2
-#        if (dist < 0):
-#            val = 0.0
+   #     distcoord = np.abs(coords - np.array(self.lens)/2)
+   #     dist = np.sqrt(np.sum(distcoord**2)) - self.dx[0]
+   #     if (dist < 1.0):
+   #         val = 0.5-0.5*np.cos(np.pi/2*(dist))
+   #     if (dist < 1.0):
+   #         val = 0.0
+   #     if (dist < 0):
+   #         val = 0.0
         return val
+
+    def init_function_phi(self, coords):
+        val = 0.0
+        distcoord = np.abs(coords - np.array(self.lens)/2)
+        distcoord[0] = max(distcoord[0]-0.5,0)
+        dist = np.sqrt(np.sum(distcoord**2)) - self.dx[0]
+        if (dist < 2.0**0.5):
+            val = (1-dist/2**0.5)**2
+        return val
+
+
+    def initialize_serial(self,fname):
+        field = np.load(fname)
+        field = np.ones(tuple(self.nb_grid_pts))
+        self.Cx.array()[...] = field[self.fftengine.subdomain_locations[0]:
+            self.fftengine.subdomain_locations[0]+self.fftengine.nb_subdomain_grid_pts[0],
+            self.fftengine.subdomain_locations[1]:self.fftengine.subdomain_locations[1]
+            +self.fftengine.nb_subdomain_grid_pts[1]]
 
     def initialize_material(self):
         material = msp.material.MaterialLinearElastic4_2d.make(self.cell, "material_small")
@@ -158,11 +180,12 @@ class parallel_fracture():
     def crappyIO(self,fname):  ## will replace this with a real parallel IO at some point
         np.save(fname+'rank{:02d}'.format(self.comm.rank),self.phi)
     
-    def muIO(self,fname,new=False):
+    def muOutput(self,fname,new=False):
         comm = muGrid.Communicator(self.comm)
         if (new):
-            if os.path.exists(fname):
-                os.remove(fname)
+            if(self.comm.rank == 0):
+                if os.path.exists(fname):
+                    os.remove(fname)
             file_io_object = muGrid.FileIONetCDF(
                 fname, muGrid.FileIONetCDF.OpenMode.Write, comm)
         else:
@@ -172,3 +195,6 @@ class parallel_fracture():
         file_frame = file_io_object.append_frame()
         file_frame.write()
         file_io_object.close()
+
+        
+

@@ -33,7 +33,6 @@ class parallel_fracture():
 
         self.fftengine = muFFT.FFT(self.nb_grid_pts,fft='fftwmpi',communicator=self.comm)
         self.fourier_buffer   = self.fftengine.register_fourier_space_field("fourier-space", 1)
-        self.x0               = np.zeros(self.fftengine.nb_subdomain_grid_pts)
         self.fourier_gradient = [msp.FourierDerivative(self.dim , i) for i in range(self.dim)]
         
         self.fc_glob = muGrid.GlobalFieldCollection(self.dim)
@@ -42,8 +41,7 @@ class parallel_fracture():
                 self.fftengine.subdomain_locations)
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
-        self.initialize_parallel_Cx()
-        self.initialize_parallel_phi()
+        self.Cx.array()[...] = self.Young*np.ones(self.fftengine.nb_subdomain_grid_pts)
         self.strain = self.fc_glob.register_real_field("strain", (2,2))
         self.straineng = self.fc_glob.register_real_field("straineng", 1)
         self.phi_old = self.phi.array() + 0.0
@@ -59,43 +57,9 @@ class parallel_fracture():
         self.strain_result = self.strain_solver()
         self.total_energy = self.objective(self.phi.array())
         
-### initialization of Cx
-    def initialize_parallel_Cx(self):
-        for ind, val in np.ndenumerate(self.Cx):
-            coords = (np.array(ind) + np.array(self.fftengine.subdomain_locations))*self.dx
-            self.Cx.array()[ind] = self.init_function_Cx(coords)*self.Young
-        
-    def initialize_parallel_phi(self):
-        for ind, val in np.ndenumerate(self.Cx):
-            coords = (np.array(ind) + np.array(self.fftengine.subdomain_locations))*self.dx
-            self.phi.array()[ind] = self.init_function_phi(coords)
-
-    def init_function_Cx(self, coords):
-        val = 1.0
-   #     distcoord = np.abs(coords - np.array(self.lens)/2)
-   #     dist = np.sqrt(np.sum(distcoord**2)) - self.dx[0]
-   #     if (dist < 1.0):
-   #         val = 0.5-0.5*np.cos(np.pi/2*(dist))
-   #     if (dist < 1.0):
-   #         val = 0.0
-   #     if (dist < 0):
-   #         val = 0.0
-        return val
-
-    def init_function_phi(self, coords):
-        val = 0.0
-        distcoord = np.abs(coords - np.array(self.lens)/2)
-        distcoord[0] = max(distcoord[0]-0.5,0)
-        dist = np.sqrt(np.sum(distcoord**2)) - self.dx[0]
-        if (dist < 2.0**0.5):
-            val = (1-dist/2**0.5)**2
-        return val
-
-
     def initialize_serial(self,fname):
-        field = np.load(fname)
-        field = np.ones(tuple(self.nb_grid_pts))
-        self.Cx.array()[...] = field[self.fftengine.subdomain_locations[0]:
+        newfield = np.load(fname)
+        return newfield[self.fftengine.subdomain_locations[0]:
             self.fftengine.subdomain_locations[0]+self.fftengine.nb_subdomain_grid_pts[0],
             self.fftengine.subdomain_locations[1]:self.fftengine.subdomain_locations[1]
             +self.fftengine.nb_subdomain_grid_pts[1]]

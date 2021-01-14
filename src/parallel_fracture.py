@@ -27,6 +27,9 @@ class parallel_fracture():
         
         self.Young = 100.0
         self.Poisson = 0.0
+        self.lamb_factor = self.Poisson/(1+self.Poisson)/(1-2*self.Poisson)
+        self.mu_factor = 1/2/(1+self.Poisson)
+        
         self.ksmall = 1e-4
         self.F_tot = np.array([[ 0.0,  0.0],
                   [ 0.0 , 0.00]])
@@ -44,6 +47,7 @@ class parallel_fracture():
         self.Cx.array()[...] = self.Young*np.ones(self.fftengine.nb_subdomain_grid_pts)
         self.strain = self.fc_glob.register_real_field("strain", (2,2))
         self.straineng = self.fc_glob.register_real_field("straineng", 1)
+        self.straineng_comp = np.zeros_like(self.phi.array())
         self.phi_old = self.phi.array() + 0.0
         self.cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
             self.fourier_gradient,fft='fftwmpi',communicator=self.comm)
@@ -87,17 +91,18 @@ class parallel_fracture():
     
 ### key parts of test system
     def get_straineng(self):
-        lamb_fact = self.Poisson/(1+self.Poisson)/(1-2*self.Poisson)
-        mu_fact = 1/2/(1+self.Poisson)
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
             strain = np.reshape(self.strain_result.grad[pixel_id*4:(pixel_id+1)*4],(2,2))
             self.strain.array()[:,:,0,pixel[0],pixel[1]] = strain
-            trace = 0.0
-            for k in range(0,self.dim):
-                trace += strain[k,k]
-            self.straineng.array()[tuple(pixel)] = 0.5*self.Cx.array()[tuple(pixel)]*(2.0*mu_fact*(strain**2).sum() 
-                + lamb_fact*self.Cx.array()[tuple(pixel)]*trace**2)
+            self.straineng.array()[tuple(pixel)],self.straineng_comp[tuple(pixel)] = \
+                self.point_straineng(strain, Cxval)
+        
+    def point_straineng(self,strain, Cx):
+        pstrains = np.linalg.eigvalsh(strain)
+        energy_compress = np.minimum(np.sum(pstrains),0)**2*self.lamb_factor*0.5 + np.sum(np.minimum(pstrains,0))**2*self.mu_factor
+        energy_tensile = np.maximum(np.sum(pstrains),0)**2*self.lamb_factor*0.5 + np.sum(np.maximum(pstrains,0))**2*self.mu_factor
+        return energy_tensile*Cx, energy_compress*Cx
 
     def laplacian(self,x):
         return_arr = np.zeros(self.fftengine.nb_subdomain_grid_pts)
@@ -118,7 +123,7 @@ class parallel_fracture():
         return return_arr*self.fftengine.normalisation**2
         
     def energy_density(self,x):
-        return (1.0-x)**2*self.straineng.array() + x + 0.5*self.grad2(x)
+        return (1.0-x)**2*self.straineng.array() + self.straineng_comp + x + 0.5*self.grad2(x)
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)

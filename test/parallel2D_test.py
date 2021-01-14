@@ -76,6 +76,7 @@ def iteration(obj,statobj):
             obj.F_tot[1,1] += obj.strain_step
             statobj.subiterations = 1
             delta_energy_old = 1e6
+            obj.phi.array()[...] = obj.phi_old
             if (obj.comm.rank == 0):
                 print('non-monotonicity of energy convergence detected, strain step reduced to ', obj.strain_step)
         else:
@@ -100,7 +101,7 @@ def run_test(obj):
         stats.avg_strain = obj.F_tot[1,1]
         stats.total_energy = obj.total_energy
         stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
-        stats.strain_energy = obj.integrate((1.0-obj.phi.array())**2*obj.straineng.array())
+        stats.strain_energy = obj.integrate((1.0-obj.phi.array())**2*obj.straineng.array() + obj.straineng_comp)
         strain_time.append(stats.strain_time)
         phi_time.append(stats.phi_time)
         subiterations.append(stats.subiterations)
@@ -110,7 +111,7 @@ def run_test(obj):
             stats.dump()
         obj.muOutput(fieldoutputname)
         #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-        if((stats.strain_energy < 1.0) and (n > 1)):
+        if((stats.strain_energy < 10.0) and (n > 4)):
             break
         obj.F_tot[1,1] += obj.strain_step
         n += 1
@@ -129,11 +130,11 @@ f.solver_tol = 1e-10
 f.title = 'test'
 f.phi.array()[...] = init_crack(f)
 
-structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
-if(f.comm.rank == 0):
-    structobj.makestruct2D()
-f.comm.barrier()
-f.Cx.array()[...] = f.initialize_serial(structobj.fname)*f.Young
+#structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
+#if(f.comm.rank == 0):
+#    structobj.makestruct2D()
+#f.comm.barrier()
+#f.Cx.array()[...] = f.initialize_serial(structobj.fname)*f.Young
 #f.Cx.array()[...] = (1.0-init_crack(f))**2*f.Young
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')

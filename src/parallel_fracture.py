@@ -45,7 +45,7 @@ class parallel_fracture():
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.Cx.array()[...] = self.Young*np.ones(self.fftengine.nb_subdomain_grid_pts)
-        self.strain = self.fc_glob.register_real_field("strain", (2,2))
+        self.strain = self.fc_glob.register_real_field("strain", 4)
         self.straineng = self.fc_glob.register_real_field("straineng", 1)
         self.straineng_comp = np.zeros_like(self.phi.array())
         self.phi_old = self.phi.array() + 0.0
@@ -83,7 +83,6 @@ class parallel_fracture():
             #temp = self.material.get_youngs_modulus(pixel_id)
             self.material.set_youngs_modulus(pixel_id,
                    Cxval*(1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall)
-        
         ### run muSpectre computation
         verbose = msp.Verbosity.Silent
         solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
@@ -94,9 +93,12 @@ class parallel_fracture():
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
             strain = np.reshape(self.strain_result.grad[pixel_id*4:(pixel_id+1)*4],(2,2))
-            self.strain.array()[:,:,0,pixel[0],pixel[1]] = strain
+            self.strain.array()[:,0,pixel[0],pixel[1]] = strain.flatten()
             self.straineng.array()[tuple(pixel)],self.straineng_comp[tuple(pixel)] = \
                 self.point_straineng(strain, Cxval)
+        active_set = self.straineng.array()[...] < self.straineng_comp
+        self.phi.array()[active_set] = 0.0
+        self.phi_old[active_set] = 0.0
         
     def point_straineng(self,strain, Cx):
         pstrains = np.linalg.eigvalsh(strain)

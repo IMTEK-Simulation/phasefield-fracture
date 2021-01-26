@@ -7,13 +7,27 @@ import numpy as np
 def constrained_conjugate_gradients(x_in,A,b,field_constraint, comm, maxiter = 20000, cg_tol = 1e-10, verbose=False):
 
     x = np.copy(x_in)
-    r = A(x) - b
+    
     mask_neg = x <= field_constraint    # Vollebregt step 2 
+    x[mask_neg] = np.copy(field_constraint[mask_neg])    # Vollebregt step 0
+    
+    # check for early termination: entire set is constrained and feasible
+    if (comm.allreduce(np.all(mask_neg),MPI.LAND) and comm.allreduce(np.all(b <= 0),MPI.LAND)):
+        if ((comm.rank == 0) and (verbose)):
+            print('Entire set is constrained and feasible.  Terminating early.')
+        return x
+   
+    r = A(x) - b
     mask_res = r >= 0
     mask_na = np.logical_and(mask_neg,mask_res)     
-    x[mask_neg] = np.copy(field_constraint[mask_neg])    # Vollebregt step 0
     r[mask_na] = 0.0      # Vollebregt step 3
     p = -r
+    
+    # check for early termination: residual meets tolerance
+    if (comm.allreduce(np.max(abs(r)),MPI.MAX) <= cg_tol):
+        if ((comm.rank == 0) and (verbose)):
+            print('Residual meets tolerance before iteration.  Terminating early.')
+        return x
     
     for i in range (1, maxiter+1):
         Ap = A(p)

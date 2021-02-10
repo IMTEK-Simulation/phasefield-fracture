@@ -48,12 +48,13 @@ def init_crack(obj):
 
 def iteration(obj,statobj):
     delta_energy = 1.0
-    delta_energy_old = 1e6
+    delta_energy_old = 1e8
     energy_old = obj.total_energy + 0.0
     statobj.subiterations = 0
     statobj.strain_time = 0.0
     statobj.phi_time = 0.0
-    
+    subitoutputname = 'subit.nc'
+    obj.muOutput(subitoutputname,new=True)
     while(delta_energy > obj.delta_energy_tol):
         start = time.time() 
         obj.strain_result = obj.strain_solver()
@@ -63,24 +64,27 @@ def iteration(obj,statobj):
         phit = time.time()
         delta_energy = abs(obj.total_energy-energy_old)
         energy_old = obj.total_energy + 0.0
-
         statobj.subiterations += 1
         statobj.strain_time += straint-start
         statobj.phi_time += phit-straint
         if(obj.comm.rank == 0):
             print('delta energy = ',delta_energy)
         if((delta_energy > delta_energy_old + obj.delta_energy_tol)
-               and (obj.strain_step > 0.001) and (statobj.subiterations > 1)):
+               and (obj.strain_step > 0.0005) and (statobj.subiterations > 1)):
             obj.F_tot[1,1] -= obj.strain_step
             obj.strain_step /= 2
             obj.F_tot[1,1] += obj.strain_step
             statobj.subiterations = 1
-            delta_energy_old = 1e6
+            delta_energy_old = 1e8
             obj.phi.array()[...] = obj.phi_old
             if (obj.comm.rank == 0):
                 print('non-monotonicity of energy convergence detected, strain step reduced to ', obj.strain_step)
         else:
             delta_energy_old = delta_energy
+        if ((statobj.subiterations % 20 == 0) or ((delta_energy > 0.000025*obj.lens[0]**2*obj.Young) and (statobj.subiterations > 1))):
+            if(obj.comm.rank == 0):
+                print('saving subiteration # ', statobj.subiterations)
+            obj.muOutput(subitoutputname)
 
 def run_test(obj):
     nmax = 50
@@ -88,7 +92,7 @@ def run_test(obj):
     strain_time = []
     phi_time = []
     subiterations = []
-    obj.F_tot[1,1] = 0.0
+    obj.F_tot[1,1] = 0.008
     obj.phi_old = obj.phi.array() + 0.0
     fieldoutputname = 'test.nc'
     obj.muOutput(fieldoutputname,new=True)
@@ -101,7 +105,7 @@ def run_test(obj):
         stats.avg_strain = obj.F_tot[1,1]
         stats.total_energy = obj.total_energy
         stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
-        stats.strain_energy = obj.integrate((1.0-obj.phi.array())**2*obj.straineng.array() + obj.straineng_comp)
+        stats.strain_energy = obj.integrate(((1.0-obj.phi.array())**2*(1-obj.ksmall)+obj.ksmall)*obj.straineng_t.array())
         strain_time.append(stats.strain_time)
         phi_time.append(stats.phi_time)
         subiterations.append(stats.subiterations)
@@ -111,7 +115,7 @@ def run_test(obj):
             stats.dump()
         obj.muOutput(fieldoutputname)
         #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-        if((stats.strain_energy < 10.0) and (n > 4)):
+        if((stats.strain_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 4)):
             break
         obj.F_tot[1,1] += obj.strain_step
         n += 1
@@ -121,20 +125,20 @@ def run_test(obj):
         print('phi time:', np.sum(phi_time))
         print('total subiterations:', np.sum(subiterations))
 
-nx=127
-Lx=20
+nx=31
+Lx=10
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
 f.delta_energy_tol = 1e-8*f.lens[0]**2
 f.solver_tol = 1e-10
 f.title = 'test'
-f.phi.array()[...] = init_crack(f)
+#f.phi.array()[...] = init_crack(f)
 
-#structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
-#if(f.comm.rank == 0):
-#    structobj.makestruct2D()
-#f.comm.barrier()
-#f.Cx.array()[...] = f.initialize_serial(structobj.fname)*f.Young
+structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
+if(f.comm.rank == 0):
+    structobj.makestruct2D()
+f.comm.barrier()
+f.Cx.array()[...] = f.initialize_serial('teststruct.npy')*f.Young
 #f.Cx.array()[...] = (1.0-init_crack(f))**2*f.Young
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')

@@ -4,7 +4,7 @@ import time
 import numpy as np
 import os
 
-mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20201214/build/"
+mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210202/build/"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
@@ -46,8 +46,8 @@ class parallel_fracture():
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.Cx.array()[...] = self.Young*np.ones(self.fftengine.nb_subdomain_grid_pts)
         self.strain = self.fc_glob.register_real_field("strain", 4)
-        self.straineng = self.fc_glob.register_real_field("straineng", 1)
-        self.straineng_comp = np.zeros_like(self.phi.array())
+        self.straineng_t = self.fc_glob.register_real_field("straineng_tensile", 1)
+        self.straineng_c = self.fc_glob.register_real_field("straineng_compressive", 1)
         self.phi_old = self.phi.array() + 0.0
         self.cell = msp.Cell(self.nb_grid_pts, self.lens ,msp.Formulation.small_strain,
             self.fourier_gradient,fft='fftwmpi',communicator=self.comm)
@@ -69,11 +69,11 @@ class parallel_fracture():
             +self.fftengine.nb_subdomain_grid_pts[1]]
 
     def initialize_material(self):
-        material = msp.material.MaterialLinearElastic4_2d.make(self.cell, "material_small")
+        material = msp.material.MaterialPhaseFieldFracture_2d.make(self.cell, "material_small",self.ksmall)
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
-            material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)]*
-                 (1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall, self.Poisson)
+           # material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)], self.Poisson, self.phi.array()[tuple(pixel)])
+            material.add_pixel(pixel_id, 100.0, self.Poisson, 0.0)
         return material
 
     def strain_solver(self):            
@@ -81,8 +81,7 @@ class parallel_fracture():
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
             pixel_id = pixel[1]+pixel[0]*self.fftengine.nb_subdomain_grid_pts[1]
             #temp = self.material.get_youngs_modulus(pixel_id)
-            self.material.set_youngs_modulus(pixel_id,
-                   Cxval*(1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall)
+            self.material.set_phase_field(pixel_id, self.phi.array()[tuple(pixel)])
         ### run muSpectre computation
         verbose = msp.Verbosity.Silent
         solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
@@ -94,17 +93,14 @@ class parallel_fracture():
             pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
             strain = np.reshape(self.strain_result.grad[pixel_id*4:(pixel_id+1)*4],(2,2))
             self.strain.array()[:,0,pixel[0],pixel[1]] = strain.flatten()
-            self.straineng.array()[tuple(pixel)],self.straineng_comp[tuple(pixel)] = \
+            self.straineng_t.array()[tuple(pixel)], self.straineng_c.array()[tuple(pixel)] =  \
                 self.point_straineng(strain, Cxval)
-        active_set = self.straineng.array()[...] < self.straineng_comp
-        self.phi.array()[active_set] = 0.0
-        self.phi_old[active_set] = 0.0
         
     def point_straineng(self,strain, Cx):
         pstrains = np.linalg.eigvalsh(strain)
-        energy_compress = np.minimum(np.sum(pstrains),0)**2*self.lamb_factor*0.5 + np.sum(np.minimum(pstrains,0))**2*self.mu_factor
+        energy_compressive = np.minimum(np.sum(pstrains),0)**2*self.lamb_factor*0.5 + np.sum(np.minimum(pstrains,0))**2*self.mu_factor
         energy_tensile = np.maximum(np.sum(pstrains),0)**2*self.lamb_factor*0.5 + np.sum(np.maximum(pstrains,0))**2*self.mu_factor
-        return energy_tensile*Cx, energy_compress*Cx
+        return energy_tensile*Cx, energy_compressive*Cx
 
     def laplacian(self,x):
         return_arr = np.zeros(self.fftengine.nb_subdomain_grid_pts)
@@ -125,7 +121,8 @@ class parallel_fracture():
         return return_arr*self.fftengine.normalisation**2
         
     def energy_density(self,x):
-        return (1.0-x)**2*self.straineng.array() + self.straineng_comp + x + 0.5*self.grad2(x)
+        return (((1.0-x)**2*(1-self.ksmall)+self.ksmall)*self.straineng_t.array() 
+            + self.straineng_c.array() + x + 0.5*self.grad2(x))
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
@@ -134,10 +131,10 @@ class parallel_fracture():
         return self.integrate(self.energy_density(x))
 
     def jacobian(self,x):
-        return 2*(x-1.0)*self.straineng.array() + 1.0 - self.laplacian(x)
+        return 2*(x-1.0)*(1-self.ksmall)*self.straineng_t.array() + 1.0 - self.laplacian(x)
 
     def hessp(self,p):
-        return 2.0*self.straineng.array()*p - self.laplacian(p) 
+        return 2.0*(1-self.ksmall)*self.straineng_t.array()*p - self.laplacian(p) 
 
     def phi_solver(self):
         self.get_straineng()

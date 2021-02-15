@@ -4,16 +4,19 @@ import numpy as np
 from matplotlib import cm
 import sys
 
-Lx = 800
-nx = 2047
-Ly = Lx
-ny = nx
 
 print(sys.argv)
 if (sys.argv == None):
     rundir = ''
 else:
     rundir = sys.argv[1]
+
+
+Lx = 800
+nx = 2047
+Ly = Lx
+ny = nx
+
 fname = rundir+'test.nc'
 ds = nc.Dataset(fname)
 print(ds['phi'].shape[0])
@@ -75,6 +78,10 @@ for i in range(0,nx):
             toty = 0.0
             phisum = 0.0
 
+x_list.append(Lx)
+y_list.append(y_list[0])
+y_list2.append(y_list2[0])
+y_list3.append(y_list3[0])
 
 fig2 = plt.figure(dpi=600)
 ax2 = fig2.add_axes([0.16, 0.15, 0.65, 0.78])
@@ -92,9 +99,9 @@ data_xy =  np.column_stack((np.array(x_list), np.array(y_list)))
 np.save(rundir+"crackpath.npy",data_xy)
 np.savetxt(rundir+"crackpath.xyz", data_xy)
 
-data_xy3 =  np.column_stack((np.array(x_list), np.array(y_list)))
+data_xy3 =  np.column_stack((np.array(x_list), np.array(y_list3)))
 
-if not (np.equal(data_xy,data_xy3).all):
+if (np.not_equal(data_xy,data_xy3).any):
     np.save(rundir+"crackpath_upper.npy", data_xy3)
-    np.save(rundir+"crackpath_upper.xyz", data_xy3)
+    np.savetxt(rundir+"crackpath_upper.xyz", data_xy3)
 

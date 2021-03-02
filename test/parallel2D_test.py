@@ -15,7 +15,7 @@ class statdump():
         self.subiterations = 0
         self.avg_strain = 0
         self.total_energy = 0
-        self.elastic_energy = 0
+        self.tensile_energy = 0
         self.delta_phi = 0
         self.strain_time = 0
         self.phi_time = 0
@@ -105,7 +105,7 @@ def run_test(obj):
         stats.avg_strain = obj.F_tot[1,1]
         stats.total_energy = obj.total_energy
         stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
-        stats.strain_energy = obj.integrate(((1.0-obj.phi.array())**2*(1-obj.ksmall)+obj.ksmall)*obj.straineng_t.array())
+        stats.tensile_energy = obj.integrate(((1.0-obj.phi.array())**2*(1-obj.ksmall)+obj.ksmall)*obj.straineng_t.array())
         strain_time.append(stats.strain_time)
         phi_time.append(stats.phi_time)
         subiterations.append(stats.subiterations)
@@ -115,7 +115,7 @@ def run_test(obj):
             stats.dump()
         obj.muOutput(fieldoutputname)
         #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-        if((stats.strain_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 4)):
+        if((stats.tensile_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 4)):
             break
         obj.F_tot[1,1] += obj.strain_step
         n += 1

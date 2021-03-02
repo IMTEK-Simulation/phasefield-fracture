@@ -45,7 +45,7 @@ class parallel_fracture():
         self.phi    = self.fc_glob.register_real_field("phi", 1)
         self.Cx     = self.fc_glob.register_real_field("Cx", 1)
         self.Cx.array()[...] = self.Young*np.ones(self.fftengine.nb_subdomain_grid_pts)
-        self.strain = self.fc_glob.register_real_field("strain", 4)
+        self.strain = self.fc_glob.register_real_field("strain", self.dim*self.dim)
         self.straineng_t = self.fc_glob.register_real_field("straineng_tensile", 1)
         self.straineng_c = self.fc_glob.register_real_field("straineng_compressive", 1)
         self.phi_old = self.phi.array() + 0.0
@@ -69,19 +69,24 @@ class parallel_fracture():
             +self.fftengine.nb_subdomain_grid_pts[1]]
 
     def initialize_material(self):
-        material = msp.material.MaterialPhaseFieldFracture_2d.make(self.cell, "material_small",self.ksmall)
+       # material = msp.material.MaterialPhaseFieldFracture_2d.make(self.cell, "material_small",self.ksmall)
+        material = msp.material.MaterialLinearElastic4_2d.make(self.cell, "material_small")
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
-            pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
-           # material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)], self.Poisson, self.phi.array()[tuple(pixel)])
-            material.add_pixel(pixel_id, 100.0, self.Poisson, 0.0)
+             pixel_id = np.ravel_multi_index(pixel, self.fftengine.nb_subdomain_grid_pts, order='F')
+             material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)]*
+                 (1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall, self.Poisson)
+        #    material.add_pixel(pixel_id, self.Cx.array()[tuple(pixel)], self.Poisson, self.phi.array()[tuple(pixel)])
+         #   material.add_pixel(pixel_id, 100.0, self.Poisson, 0.0)
         return material
 
     def strain_solver(self):            
         ### set current material properties
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
-            pixel_id = pixel[1]+pixel[0]*self.fftengine.nb_subdomain_grid_pts[1]
+            pixel_id = np.ravel_multi_index(pixel, self.fftengine.nb_subdomain_grid_pts, order='C')
+            self.material.set_youngs_modulus(pixel_id,
+                   Cxval*(1.0-self.phi.array()[tuple(pixel)])**2+self.ksmall)
             #temp = self.material.get_youngs_modulus(pixel_id)
-            self.material.set_phase_field(pixel_id, self.phi.array()[tuple(pixel)])
+        #    self.material.set_phase_field(pixel_id, self.phi.array()[tuple(pixel)])
         ### run muSpectre computation
         verbose = msp.Verbosity.Silent
         solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
@@ -90,7 +95,7 @@ class parallel_fracture():
 ### key parts of test system
     def get_straineng(self):
         for pixel, Cxval in np.ndenumerate(self.Cx.array()):
-            pixel_id = pixel[0]+pixel[1]*self.fftengine.nb_subdomain_grid_pts[0]
+            pixel_id = np.ravel_multi_index(pixel, self.fftengine.nb_subdomain_grid_pts, order='F')
             strain = np.reshape(self.strain_result.grad[pixel_id*4:(pixel_id+1)*4],(2,2))
             self.strain.array()[:,0,pixel[0],pixel[1]] = strain.flatten()
             self.straineng_t.array()[tuple(pixel)], self.straineng_c.array()[tuple(pixel)] =  \

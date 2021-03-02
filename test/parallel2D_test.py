@@ -70,7 +70,7 @@ def iteration(obj,statobj):
         if(obj.comm.rank == 0):
             print('delta energy = ',delta_energy)
         if((delta_energy > delta_energy_old + obj.delta_energy_tol)
-               and (obj.strain_step > 0.0005) and (statobj.subiterations > 1)):
+               and (obj.strain_step > 0.0005) and (statobj.subiterations > 5)):
             obj.F_tot[1,1] -= obj.strain_step
             obj.strain_step /= 2
             obj.F_tot[1,1] += obj.strain_step
@@ -125,20 +125,20 @@ def run_test(obj):
         print('phi time:', np.sum(phi_time))
         print('total subiterations:', np.sum(subiterations))
 
-nx=31
+nx=63
 Lx=10
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
-f.delta_energy_tol = 1e-8*f.lens[0]**2
-f.solver_tol = 1e-10
+f.delta_energy_tol = 1e-6*f.lens[0]**2
+f.solver_tol = 1e-8
 f.title = 'test'
-#f.phi.array()[...] = init_crack(f)
+f.phi.array()[...] = init_crack(f)
 
 structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
-if(f.comm.rank == 0):
-    structobj.makestruct2D()
-f.comm.barrier()
-f.Cx.array()[...] = f.initialize_serial('teststruct.npy')*f.Young
+#if(f.comm.rank == 0):
+#    structobj.makestruct2D()
+#f.comm.barrier()
+#f.Cx.array()[...] = f.initialize_serial('teststruct.npy')*f.Young
 #f.Cx.array()[...] = (1.0-init_crack(f))**2*f.Young
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')

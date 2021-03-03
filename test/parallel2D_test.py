@@ -1,9 +1,9 @@
 import sys
 sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/quasistatic-parallel-2D/src")
 import makestruct
-import parallel_fracture
 import mechanics
 import model_components
+import parallel_fracture
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -16,7 +16,7 @@ class statdump():
         self.subiterations = 0
         self.avg_strain = 0
         self.total_energy = 0
-        self.tensile_energy = 0
+        self.coupling_energy = 0
         self.delta_phi = 0
         self.strain_time = 0
         self.phi_time = 0
@@ -54,7 +54,7 @@ def iteration(obj,statobj):
     statobj.subiterations = 0
     statobj.strain_time = 0.0
     statobj.phi_time = 0.0
-    subitoutputname = 'subit.nc'
+    subitoutputname = 'altmin_subit.nc'
     obj.muOutput(subitoutputname,new=True)
     while(delta_energy > obj.delta_energy_tol):
         start = time.time() 
@@ -71,7 +71,7 @@ def iteration(obj,statobj):
         if(obj.comm.rank == 0):
             print('delta energy = ',delta_energy)
         if((delta_energy > delta_energy_old + obj.delta_energy_tol)
-               and (obj.strain_step > 0.0005) and (statobj.subiterations > 5)):
+               and (obj.strain_step > 0.0005) and (statobj.subiterations > 1)):
             obj.F_tot[1,1] -= obj.strain_step
             obj.strain_step /= 2
             obj.F_tot[1,1] += obj.strain_step
@@ -106,7 +106,7 @@ def run_test(obj):
         stats.avg_strain = obj.F_tot[1,1]
         stats.total_energy = obj.total_energy
         stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
-        stats.tensile_energy = obj.integrate(((1.0-obj.phi.array())**2*(1-obj.ksmall)+obj.ksmall)*obj.straineng_t.array())
+        stats.coupling_energy = obj.integrate(obj.straineng*obj.interp.energy(obj.phi.array()))
         strain_time.append(stats.strain_time)
         phi_time.append(stats.phi_time)
         subiterations.append(stats.subiterations)
@@ -116,7 +116,7 @@ def run_test(obj):
             stats.dump()
         obj.muOutput(fieldoutputname)
         #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-        if((stats.tensile_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 4)):
+        if((stats.coupling_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 5)):
             break
         obj.F_tot[1,1] += obj.strain_step
         n += 1
@@ -129,7 +129,7 @@ def run_test(obj):
 nx=63
 Lx=10
 
-f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx, mechanics_formulation=mechanics.anisotropic_tc())
+f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
 f.delta_energy_tol = 1e-6*f.lens[0]**2
 f.solver_tol = 1e-8
 f.title = 'test'

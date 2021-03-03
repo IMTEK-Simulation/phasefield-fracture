@@ -1,8 +1,9 @@
 import sys
-sys.path.append('/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/quasistatic-parallel-2D/src')
-#sys.path.append('/Users/andrews/code/muspectre_misc/parallel2D/src')
-import parallel_fracture
+sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/quasistatic-parallel-2D/src")
 import makestruct
+import parallel_fracture
+import mechanics
+import model_components
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -128,7 +129,7 @@ def run_test(obj):
 nx=63
 Lx=10
 
-f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
+f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx, mechanics_formulation=mechanics.anisotropic_tc())
 f.delta_energy_tol = 1e-6*f.lens[0]**2
 f.solver_tol = 1e-8
 f.title = 'test'

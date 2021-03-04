@@ -4,33 +4,13 @@ import makestruct
 import mechanics
 import model_components
 import parallel_fracture
+import simulation
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
 import time
 
-class statdump():
-
-    def __init__(self, fname):
-        self.subiterations = 0
-        self.avg_strain = 0
-        self.total_energy = 0
-        self.coupling_energy = 0
-        self.delta_phi = 0
-        self.strain_time = 0
-        self.phi_time = 0
-        self.fname = fname
-    
-    def clear(self):
-        if os.path.exists(self.fname):
-            os.remove(self.fname)
-
-    def dump(self):
-        jsonfile = open(self.fname, mode='a+')
-        json.dump(self.__dict__,jsonfile,default=lambda o: "(array)")
-        jsonfile.write('\n')
-        jsonfile.close()
 
 def init_crack(obj):
     vals = np.zeros_like(obj.phi.array())
@@ -47,90 +27,11 @@ def init_crack(obj):
         vals[ind] = val
     return vals
 
-def iteration(obj,statobj):
-    delta_energy = 1.0
-    delta_energy_old = 1e8
-    energy_old = obj.total_energy + 0.0
-    statobj.subiterations = 0
-    statobj.strain_time = 0.0
-    statobj.phi_time = 0.0
-    subitoutputname = 'altmin_subit.nc'
-    obj.muOutput(subitoutputname,new=True)
-    while(delta_energy > obj.delta_energy_tol):
-        start = time.time() 
-        obj.strain_result = obj.strain_solver()
-        straint = time.time() 
-        obj.phi_solver()
-        obj.total_energy = obj.objective(obj.phi.array())
-        phit = time.time()
-        delta_energy = abs(obj.total_energy-energy_old)
-        energy_old = obj.total_energy + 0.0
-        statobj.subiterations += 1
-        statobj.strain_time += straint-start
-        statobj.phi_time += phit-straint
-        if(obj.comm.rank == 0):
-            print('delta energy = ',delta_energy)
-        if((delta_energy > delta_energy_old + obj.delta_energy_tol)
-               and (obj.strain_step > 0.0005) and (statobj.subiterations > 1)):
-            obj.F_tot[1,1] -= obj.strain_step
-            obj.strain_step /= 2
-            obj.F_tot[1,1] += obj.strain_step
-            statobj.subiterations = 1
-            delta_energy_old = 1e8
-            obj.phi.array()[...] = obj.phi_old
-            if (obj.comm.rank == 0):
-                print('non-monotonicity of energy convergence detected, strain step reduced to ', obj.strain_step)
-        else:
-            delta_energy_old = delta_energy
-        if ((statobj.subiterations % 20 == 0) or ((delta_energy > 0.000025*obj.lens[0]**2*obj.Young) and (statobj.subiterations > 1))):
-            if(obj.comm.rank == 0):
-                print('saving subiteration # ', statobj.subiterations)
-            obj.muOutput(subitoutputname)
-
-def run_test(obj):
-    nmax = 50
-    obj.strain_step = 0.008
-    strain_time = []
-    phi_time = []
-    subiterations = []
-    obj.F_tot[1,1] = 0.008
-    obj.phi_old = obj.phi.array() + 0.0
-    fieldoutputname = 'test.nc'
-    obj.muOutput(fieldoutputname,new=True)
-    stats = statdump('stats.json',)
-    if(obj.comm.rank == 0): 
-        stats.clear()
-    n = 0
-    while (n < nmax):
-        iteration(obj,stats)
-        stats.avg_strain = obj.F_tot[1,1]
-        stats.total_energy = obj.total_energy
-        stats.delta_phi = obj.integrate(obj.phi.array()-obj.phi_old)
-        stats.coupling_energy = obj.integrate(obj.straineng*obj.interp.energy(obj.phi.array()))
-        strain_time.append(stats.strain_time)
-        phi_time.append(stats.phi_time)
-        subiterations.append(stats.subiterations)
-        obj.phi_old = np.maximum(obj.phi.array(),obj.phi_old)
-        if(obj.comm.rank == 0):
-            print('strain: ', stats.avg_strain, 'energy: ',stats.total_energy,'delta phi',stats.delta_phi)
-            stats.dump()
-        obj.muOutput(fieldoutputname)
-        #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-        if((stats.coupling_energy < (0.01*obj.lens[0])**2*obj.Young) and (n > 5)):
-            break
-        obj.F_tot[1,1] += obj.strain_step
-        n += 1
-    
-    if(obj.comm.rank == 0):
-        print('strain time:', np.sum(strain_time))
-        print('phi time:', np.sum(phi_time))
-        print('total subiterations:', np.sum(subiterations))
 
 nx=63
 Lx=10
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
-f.delta_energy_tol = 1e-6*f.lens[0]**2
 f.solver_tol = 1e-8
 f.title = 'test'
 f.phi.array()[...] = init_crack(f)
@@ -147,7 +48,8 @@ if(f.comm.rank == 0):
     jsonfile.close()
 
 startt = time.time()
-run_test(f)
+sim = simulation.simulation(f)
+sim.run_simulation()
 endt = time.time()
 
 if(f.comm.rank == 0):

@@ -52,7 +52,7 @@ class parallel_fracture():
 
         ## choosing components
         if (mechanics_formulation==None):
-            self.mechform = mechanics.anisotropic_tc()
+            self.mechform = mechanics.anisotropic_tc(self)
         else:
             self.mechform = mechanics_formulation
 
@@ -65,12 +65,8 @@ class parallel_fracture():
         self.material = self.mechform.initialize_material(self)
         self.cell.initialise()  #initialization of fft to make faster fft
 
-        self.delta_energy_tol = 1e-6
         self.solver_tol = 1e-10
         self.maxiter_cg = 40000
-        ### initialize strain calculation result and energy
-        self.strain_result = self.strain_solver()
-        self.total_energy = self.objective(self.phi.array())
         
     def initialize_serial(self,fname):
         newfield = np.load(fname)
@@ -86,11 +82,10 @@ class parallel_fracture():
         return msp.solvers.newton_cg(self.cell, self.F_tot, solver, self.solver_tol, self.solver_tol, verbose)
     
     def phi_solver(self):
-        self.mechform.get_elastic_coupling(self)
         Jx = -self.jacobian(self.phi.array())
         solve = cCG.constrainedCG(Jx, self.hessp, Jx,
                                  self.phi_old - self.phi.array(), self.comm)
-        self.phi.array()[...] += solve.result
+        return solve
     
     def laplacian(self,x):
         return_arr = np.zeros(self.fftengine.nb_subdomain_grid_pts)

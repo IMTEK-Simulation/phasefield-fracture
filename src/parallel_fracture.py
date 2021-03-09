@@ -52,7 +52,7 @@ class parallel_fracture():
 
         ## choosing components
         if (mechanics_formulation==None):
-            self.mechform = mechanics.anisotropic_tc(self)
+            self.mechform = mechanics.anisotropic_tc()
         else:
             self.mechform = mechanics_formulation
 

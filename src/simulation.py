@@ -44,11 +44,13 @@ class simulation():
         phit = time.time()
         subit_stats.delta_energy = self.total_energy - self.energy_old
         self.delta_energy = abs(subit_stats.delta_energy)
-        subit_stats.elastic_subits = strain_solve.nb_it
+        subit_stats.elastic_CG_its = strain_solve.nb_fev
+        subit_stats.elastic_newton_its = strain_solve.nb_it
         subit_stats.elastic_time = straint-start
         subit_stats.phi_subits = phi_solve.n_iterations
         subit_stats.phi_time = phit-straint
         self.stats.subiteration_update(subit_stats)
+        subit_stats.subiteration = self.stats.subiterations
         if(self.obj.comm.rank == 0):
             subit_stats.dump()
         

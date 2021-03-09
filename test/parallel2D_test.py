@@ -29,9 +29,10 @@ def init_crack(obj):
 
 
 nx=63
-Lx=10
+Lx=20
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
+f.strain_step_tensor = np.array([[0,0],[0,1.0]])
 f.solver_tol = 1e-8
 f.title = 'test'
 f.phi.array()[...] = init_crack(f)

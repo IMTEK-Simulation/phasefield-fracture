@@ -21,7 +21,7 @@ class simulation():
             self.stats.clear()
             dummy_subit_stats.clear()
         self.domain_measure = np.array(obj.lens).prod()
-        self.delta_energy_tol = 1e-6*self.domain_measure
+        self.delta_energy_tol = 1e-8*self.domain_measure
         self.total_energy = self.obj.objective(self.obj.phi.array())
         self.delta_energy = 0.0
         self.energy_old = 0.0

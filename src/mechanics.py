@@ -41,7 +41,7 @@ class isotropic_tc():
             for k in range(0,obj.dim):
                 trace += strain[k,k]
             obj.straineng.array()[tuple(pixel)] = 0.5*obj.Cx.array()[tuple(pixel)]*(2.0*mu_factor*(strain**2).sum() 
-                + lamb_factor*obj.Cx.array()[tuple(pixel)]*trace**2)
+                + lamb_factor*trace**2)
                 
     def get_elastic_energy(self, obj):
         return obj.straineng.array()*obj.interp.energy(obj.phi.array())

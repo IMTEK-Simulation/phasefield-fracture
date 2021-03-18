@@ -17,7 +17,7 @@ import model_components
 import constrainedCG as cCG
 
 class parallel_fracture():
-    def __init__(self, Lx = 10, nx = 63, cfield=None, mechanics_formulation=None, pfmodel=None):
+    def __init__(self, Lx = 10, nx = 63, cfield=None, mechanics_formulation=None, pfmodel=None, Poisson=0.0):
         self.dim = 2
         self.lens = [Lx, Lx] #simulation cell lengths
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
@@ -26,7 +26,7 @@ class parallel_fracture():
         
         self.ksmall = 1e-4
         self.Young = 100.0
-        self.Poisson = 0.0
+        self.Poisson = Poisson
         self.lamb_factor = self.Poisson/(1+self.Poisson)/(1-2*self.Poisson)
         self.mu_factor = 1/2/(1+self.Poisson)
         
@@ -62,11 +62,12 @@ class parallel_fracture():
         else:
             self.bulk = pfmodel
 
-        self.material = self.mechform.initialize_material(self)
-        self.cell.initialise()  #initialization of fft to make faster fft
-
         self.solver_tol = 1e-10
         self.maxiter_cg = 40000
+
+    def initialize_material(self):
+        self.material = self.mechform.initialize_material(self)
+        self.cell.initialise()  #initialization of fft to make faster fft
         
     def initialize_serial(self,fname):
         newfield = np.load(fname)

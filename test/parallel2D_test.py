@@ -48,6 +48,8 @@ if(f.comm.rank == 0):
     json.dump(f.__dict__,jsonfile,default=lambda o: "(array)")
     jsonfile.close()
 
+f.initialize_material()
+
 startt = time.time()
 sim = simulation.simulation(f)
 sim.run_simulation()

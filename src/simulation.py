@@ -11,6 +11,7 @@ class simulation():
     
     def __init__(self, obj):
         self.obj = obj
+        self.nmax = 100
         self.subit_outputname = 'altmin_subit.nc'
         self.fullit_outputname = 'test.nc'
         self.subit_statsname = 'stats_subit.json'
@@ -27,6 +28,8 @@ class simulation():
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
         self.strain_step_scalar = 0.008
+        self.min_strain_step = 0.0005
+        self.min_its = 5
         
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -63,7 +66,7 @@ class simulation():
             if(self.obj.comm.rank == 0):
                 print('delta energy = ', self.delta_energy)
             if((self.delta_energy > delta_energy_old + self.delta_energy_tol)
-                   and (self.strain_step_scalar > 0.0005) and (self.stats.subiterations > 1)):
+                   and (self.strain_step_scalar > self.min_strain_step) and (self.stats.subiterations > 1)):
                 self.obj.F_tot -= self.strain_step_tensor*self.strain_step_scalar
                 self.strain_step_scalar /= 2
                 self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
@@ -83,13 +86,12 @@ class simulation():
                 self.obj.muOutput(self.subit_outputname)
 
     def run_simulation(self):
-        nmax = 50
         self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
         self.obj.phi_old = self.obj.phi.array() + 0.0
         self.obj.muOutput(self.fullit_outputname,new=True)
         self.stats = statlog.full_iteration_stats(self.fullit_statsname)
         n = 0
-        while (n < nmax):
+        while (n < self.nmax):
             self.iteration()
             self.stats.avg_strain = self.avg_strain()
             self.stats.total_energy = self.total_energy
@@ -104,7 +106,8 @@ class simulation():
                 self.stats.dump()
             self.obj.muOutput(self.fullit_outputname)
             #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-            if((self.stats.coupling_energy < 0.01**self.obj.dim*self.domain_measure*self.obj.Young) and (n > 5)):
+            if(((self.stats.coupling_energy < 0.01**self.obj.dim*self.domain_measure*self.obj.Young) or
+                (self.stats.delta_phi > self.obj.lens[1]/2)) and (n > self.min_its)):
                 break
             self.stats.iteration_reset()
             self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar

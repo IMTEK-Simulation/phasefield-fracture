@@ -18,13 +18,13 @@ class AT2():
         self.name = "AT2"
         
     def energy(self, x):
-        return obj.phi.array()**2
+        return 1.5*x**2
         
     def jac(self,x):
-        return 2*x
+        return 3*x
         
     def hessp(self,p):
-        return 2*p
+        return 3*p
         
 
 class interp1():

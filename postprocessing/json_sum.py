@@ -11,7 +11,10 @@ def json_sum(rundir, verbose=False):
         obj = json.loads(line)
         for key in obj:
             if key in totaldict:
-                totaldict[key] += obj[key]
+                if(( key == 'elastic_CG_its') or (key == 'elastic_newton_its')):
+                    totaldict[key] = obj[key]
+                else:
+                    totaldict[key] += obj[key]
             else:
                 totaldict[key] = obj[key]
         if 'solver time' in totaldict:
@@ -52,7 +55,7 @@ class json_analyze():
     def query_attribute(self, attr):
         for dirname in self.rundirs:
             if attr in self.superdict[dirname]:
-                print('For run in '+dirname+', total '+attr+' is: '+str(self.superdict[dirname][attr]))
+                print('For run in {0: <40}'.format(dirname+',')+'total '+attr+' is: '+str(self.superdict[dirname][attr]))
             else:
                 print('No attribute '+attr+' in output for '+dirname)
 

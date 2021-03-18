@@ -74,7 +74,7 @@ class anisotropic_tc():
             obj.strain.array()[:,0,pixel[0],pixel[1]] = strain.flatten()
             pstrains = np.linalg.eigvalsh(strain)
             obj.straineng.array()[tuple(pixel)] = Cxval*(np.maximum(np.sum(pstrains),0)**2*
-                lamb_factor*0.5 + np.sum(np.maximum(pstrains,0))**2*mu_factor)
+                lamb_factor*0.5 + np.sum(np.maximum(pstrains,0)**2)*mu_factor)
         
     def get_compressive_energy(self,obj):
         lamb_factor = obj.Poisson/(1+obj.Poisson)/(1-2*obj.Poisson)
@@ -85,7 +85,7 @@ class anisotropic_tc():
             strain = np.reshape(obj.strain.array()[:,0,pixel[0],pixel[1]],(obj.dim,obj.dim))
             pstrains = np.linalg.eigvalsh(strain)
             compressive_energy[tuple(pixel)] = Cxval*(np.minimum(np.sum(pstrains),0)**2*lamb_factor*0.5 +
-                np.sum(np.minimum(pstrains,0))**2*mu_factor)
+                np.sum(np.minimum(pstrains,0)**2)*mu_factor)
         return compressive_energy
         
     def get_elastic_energy(self, obj):

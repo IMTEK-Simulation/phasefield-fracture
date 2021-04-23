@@ -4,7 +4,8 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210202/build/"
+#mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210202/build/"
+mu_build_path = "/Users/andrews/code/new_muspectre_installations/muspectre-20210322/build"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
@@ -62,7 +63,9 @@ class parallel_fracture():
         else:
             self.bulk = pfmodel
 
-        self.solver_tol = 1e-10
+        self.solver_CG_tol = 1e-4
+        self.solver_abs_tol = 1e-10
+        self.solver_rel_tol = 1e-6
         self.maxiter_cg = 40000
 
     def initialize_material(self):
@@ -79,8 +82,8 @@ class parallel_fracture():
     def strain_solver(self):            
         self.mechform.update_material(self)
         verbose = msp.Verbosity.Silent
-        solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_tol, self.maxiter_cg, verbose)
-        return msp.solvers.newton_cg(self.cell, self.F_tot, solver, self.solver_tol, self.solver_tol, verbose)
+        solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_CG_tol, self.maxiter_cg, verbose)
+        return msp.solvers.newton_cg(self.cell, self.F_tot, solver, self.solver_rel_tol, self.solver_abs_tol, verbose)
     
     def phi_solver(self):
         Jx = -self.jacobian(self.phi.array())

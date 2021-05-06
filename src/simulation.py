@@ -11,7 +11,7 @@ class simulation():
     
     def __init__(self, obj):
         self.obj = obj
-        self.nmax = 100
+        self.nmax = 400
         self.subit_outputname = 'altmin_subit.nc'
         self.fullit_outputname = 'test.nc'
         self.subit_statsname = 'stats_subit.json'
@@ -27,8 +27,8 @@ class simulation():
         self.delta_energy = 0.0
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
-        self.strain_step_scalar = 0.008
-        self.min_strain_step = 0.0005
+        self.strain_step_scalar = 0.0008
+        self.min_strain_step = 0.00005
         self.min_its = 5
         
     def avg_strain(self):
@@ -106,7 +106,7 @@ class simulation():
                 self.stats.dump()
             self.obj.muOutput(self.fullit_outputname)
             #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-            if(((self.stats.coupling_energy < 0.01**self.obj.dim*self.domain_measure*self.obj.Young) or
+            if (((self.stats.coupling_energy < 0.02*self.domain_measure) or
                 (self.stats.delta_phi > self.obj.lens[1]/2)) and (n > self.min_its)):
                 break
             self.stats.iteration_reset()

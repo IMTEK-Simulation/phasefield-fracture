@@ -18,13 +18,13 @@ class AT2():
         self.name = "AT2"
         
     def energy(self, x):
-        return 1.5*x**2
+        return (16.0/9.0)*x**2
         
     def jac(self,x):
-        return 3*x
+        return (32.0/9.0)*x
         
     def hessp(self,p):
-        return 3*p
+        return (32.0/9.0)*p
         
 
 class interp1():

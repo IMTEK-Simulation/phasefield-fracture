@@ -33,7 +33,7 @@ Lx=20
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
 f.strain_step_tensor = np.array([[0,0],[0,1.0]])
-f.solver_tol = 1e-8
+f.solver_tol = 1e-6
 f.title = 'test'
 f.phi.array()[...] = init_crack(f)
 
@@ -52,6 +52,7 @@ f.initialize_material()
 
 startt = time.time()
 sim = simulation.simulation(f)
+sim.delta_energy_tol = 1e-4
 sim.run_simulation()
 endt = time.time()
 

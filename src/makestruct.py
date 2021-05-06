@@ -39,9 +39,12 @@ class randomfield():
         print('sigma_final=',sigma_final)
         return h_qs
     
-    def struct2D(self):
+    def struct2D(self, eta_in=None):
         np.random.seed()
-        eta = np.random.normal(0.0,1.0,size=(self.nx,self.nx))
+        if (eta_in is not None):
+            eta = eta_in
+        else:
+            eta = np.random.normal(0.0,1.0,size=(self.nx,self.nx))
         sigma_init = np.sqrt(np.sum(eta**2)/self.nx**2 - np.sum(eta)**2/self.nx**4)
         print('sigma_init=',sigma_init)
         qx = np.arange(0,self.nx, dtype=np.float64)

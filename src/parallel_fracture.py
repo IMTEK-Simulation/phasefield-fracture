@@ -4,8 +4,7 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-#mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210202/build/"
-mu_build_path = "/Users/andrews/code/new_muspectre_installations/muspectre-20210322/build"
+mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210331/build/"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
@@ -26,7 +25,7 @@ class parallel_fracture():
         self.comm = MPI.COMM_WORLD
         
         self.ksmall = 1e-4
-        self.Young = 100.0
+        self.Young = 10000.0
         self.Poisson = Poisson
         self.lamb_factor = self.Poisson/(1+self.Poisson)/(1-2*self.Poisson)
         self.mu_factor = 1/2/(1+self.Poisson)

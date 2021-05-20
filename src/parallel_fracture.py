@@ -4,7 +4,7 @@ import numpy as np
 import os
 from mpi4py import MPI
 
-mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210331/build/"
+mu_build_path = "/Users/andrews/code/new_muspectre_installations/muspectre-20210322/build"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
@@ -23,7 +23,7 @@ class parallel_fracture():
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
         self.dx = np.array([Lx/nx, Lx/nx])
         self.comm = MPI.COMM_WORLD
-        
+        self.dt = 1       
         self.ksmall = 1e-4
         self.Young = 10000.0
         self.Poisson = Poisson
@@ -89,6 +89,12 @@ class parallel_fracture():
         solve = cCG.constrainedCG(Jx, self.hessp, Jx,
                                  self.phi_old - self.phi.array(), self.comm)
         return solve
+
+    def phi_implicit_solver(self):
+        Jx = -self.jacobian(self.phi.array()) - (self.phi.array() - self.phi_old)/self.dt
+        solve = cCG.constrainedCG(Jx, self.implicit_hessp, Jx,
+                                 self.phi_old - self.phi.array(), self.comm)
+        return solve
     
     def laplacian(self,x):
         return_arr = np.zeros(self.fftengine.nb_subdomain_grid_pts)
@@ -122,6 +128,9 @@ class parallel_fracture():
 
     def hessp(self,p):
         return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) 
+
+    def implicit_hessp(self,p):
+        return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) + p/self.dt
 
     def muOutput(self,fname,new=False):
         comm = muGrid.Communicator(self.comm)

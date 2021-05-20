@@ -59,6 +59,7 @@ class altmin_iteration_stats(statdump):
         self.phi_time = 0
         self.phi_subits = 0
         self.delta_energy = 0
+        self.delta_phi = 0
         
         
     

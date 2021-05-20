@@ -2,7 +2,8 @@ import numpy as np
 from mpi4py import MPI
 
 import sys
-mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210331/build/"
+
+mu_build_path = "/Users/andrews/code/new_muspectre_installations/muspectre-20210322/build"
 sys.path.append(mu_build_path + '/language_bindings/python')
 sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
 sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')

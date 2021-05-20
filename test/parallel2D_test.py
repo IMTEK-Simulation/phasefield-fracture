@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/quasistatic-parallel-2D/src")
+sys.path.append("/Users/andrews/code/quasistatic-parallel-2D/src/")
 import makestruct
 import mechanics
 import model_components

@@ -31,6 +31,9 @@ class simulation():
         self.strain_step_scalar = 0.0008
         self.min_strain_step = 0.00005
         self.min_its = 5
+        self.dt0 = 2**16
+        self.dtmin = 2**(-8)
+        self.dphidt = 1
 
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -106,9 +109,7 @@ class simulation():
             print('beginning implicit timestepping')
         #while(delta_energy_timestep > self.delta_energy_tol*self.obj.dt):
         n = 0
-        dt0 = 1e6
-        self.obj.dt = dt0
-        dtmin = 0.01
+        self.obj.dt = self.dt0
         while((self.stats.coupling_energy > 0.02*self.domain_measure) or
             (self.delta_energy > self.delta_energy_tol)):
        # while((self.delta_energy > self.delta_energy_tol*1e-2)):
@@ -117,20 +118,20 @@ class simulation():
             self.delta_phi = 0.0
             while True:
                 self.subiteration(IsImplicit=True)
-                if((self.delta_phi > 0.1) and (self.obj.dt > dtmin)):
-                    self.obj.dt /= 10
+                if((self.delta_phi > self.dphidt) and (self.obj.dt > self.dtmin)):
+                    self.obj.dt /= 2
                     if(self.obj.comm.rank == 0):
                         print('decreasing timestep, delta phi = ', self.delta_phi)
                     self.obj.phi.array()[...] = self.obj.phi_old + 0.0
                 else:
-                    if ((self.delta_phi < 0.01) and (self.obj.dt < dt0)):
-                        self.obj.dt *= 10
+                    if ((self.delta_phi < self.dphidt/10) and (self.obj.dt < self.dt0)):
+                        self.obj.dt *= 2
                     break
             #self.obj.dt = 0.1
             if(self.obj.comm.rank == 0):
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
                    'delta phi = ', self.delta_phi , ', dt = ', self.obj.dt)
-            if (( self.delta_phi > 0.1) or (n % 20 == 0)):
+            if (( self.delta_phi > 10.0) or (n % 10 == 0)):
                 if(self.obj.comm.rank == 0):
                     print('saving implicit timestep # ', n,' with energy = ', self.total_energy)
                 self.obj.muOutput('timestep.nc')

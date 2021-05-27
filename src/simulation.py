@@ -31,9 +31,10 @@ class simulation():
         self.strain_step_scalar = 0.0008
         self.min_strain_step = 0.00005
         self.min_its = 5
-        self.dt0 = 2**16
+        self.dt0 = 2**20
         self.dtmin = 2**(-8)
-        self.dphidt = 1
+        self.dphidt = 0.1
+        self.couplinglim = 1.2
 
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -124,13 +125,17 @@ class simulation():
                         print('decreasing timestep, delta phi = ', self.delta_phi)
                     self.obj.phi.array()[...] = self.obj.phi_old + 0.0
                 else:
-                    if ((self.delta_phi < self.dphidt/10) and (self.obj.dt < self.dt0)):
+                    if ((self.delta_phi < self.dphidt/2) and (self.obj.dt < self.dt0)):
                         self.obj.dt *= 2
                     break
+            couplingmax = self.obj.max(self.obj.interp.energy(self.obj.phi_old)*self.obj.straineng.array())
+            if (couplingmax > 1.0):
+                self.obj.F_tot *= (1.0/couplingmax)**0.5
             #self.obj.dt = 0.1
-            if(self.obj.comm.rank == 0):
+            if (self.obj.comm.rank == 0):
+                print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
-                   'delta phi = ', self.delta_phi , ', dt = ', self.obj.dt)
+                   'delta phi = ', self.delta_phi)
             if (( self.delta_phi > 10.0) or (n % 10 == 0)):
                 if(self.obj.comm.rank == 0):
                     print('saving implicit timestep # ', n,' with energy = ', self.total_energy)

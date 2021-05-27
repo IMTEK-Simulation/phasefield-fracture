@@ -120,6 +120,9 @@ class parallel_fracture():
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
         
+    def max(self,f):
+        return self.comm.allreduce(np.max(f),MPI.MAX)
+
     def objective(self,x):
         return self.integrate(self.energy_density(x))
 

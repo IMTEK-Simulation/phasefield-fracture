@@ -22,18 +22,18 @@ class simulation():
             self.stats.clear()
             dummy_subit_stats.clear()
         self.domain_measure = np.array(obj.lens).prod()
-        self.delta_energy_tol = 1e-7*self.domain_measure
+        self.delta_energy_tol = 1e-5
         self.total_energy = self.obj.objective(self.obj.phi.array())
         self.delta_energy = 0.0
         self.delta_phi = 0.0
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
-        self.strain_step_scalar = 0.0008
-        self.min_strain_step = 0.00005
+        self.strain_step_scalar = 0.0004
+        self.min_strain_step = 0.000025
         self.min_its = 5
         self.dt0 = 2**20
         self.dtmin = 2**(-8)
-        self.dphidt = 0.1
+        self.dphidt = 0.5
         self.couplinglim = 1.2
 
     def avg_strain(self):
@@ -129,8 +129,8 @@ class simulation():
                         self.obj.dt *= 2
                     break
             couplingmax = self.obj.max(self.obj.interp.energy(self.obj.phi_old)*self.obj.straineng.array())
-            if (couplingmax > 1.0):
-                self.obj.F_tot *= (1.0/couplingmax)**0.5
+            if (couplingmax > self.couplinglim):
+                self.obj.F_tot *= (self.couplinglim/couplingmax)**0.5
             #self.obj.dt = 0.1
             if (self.obj.comm.rank == 0):
                 print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)

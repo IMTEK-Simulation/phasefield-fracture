@@ -47,6 +47,7 @@ def half_sigmoid(f, cutoff, k=10):
         abs(cutoff)**k+np.abs(x[np.asarray(x < 0)])**k)**(1/k)
     return y
 
+<<<<<<< HEAD
 def threshsymm(field, Vf):
     measure = np.array(field.shape).prod()
     mu = np.sum(field)/measure

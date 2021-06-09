@@ -28,13 +28,13 @@ class simulation():
         self.delta_phi = 0.0
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
-        self.strain_step_scalar = 0.0004
-        self.min_strain_step = 0.000025
+        self.strain_step_scalar = 0.0008
+        self.min_strain_step = 0.00005
         self.min_its = 5
-        self.dt0 = 2**20
+        self.dt0 = 2**16
         self.dtmin = 2**(-8)
         self.dphidt = 0.5
-        self.couplinglim = 1.2
+        self.couplinglim = 2.0
 
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -49,16 +49,12 @@ class simulation():
         if(IsImplicit==False):
             phi_solve = self.obj.phi_solver()
         else:
-#            grad = self.obj.integrate(np.abs(self.obj.jacobian(self.obj.phi.array())))
-#            step_radius = 10
-#            self.obj.dt = min(step_radius/grad, step_radius)
             phi_solve = self.obj.phi_implicit_solver()
         self.obj.phi.array()[...] += phi_solve.result
         self.total_energy = self.obj.objective(self.obj.phi.array())
         phit = time.time()
         subit_stats.delta_energy = self.total_energy - self.energy_old
         subit_stats.delta_phi = self.obj.integrate(phi_solve.result)
-#        print(subit_stats.delta_phi, self.obj.integrate(self.obj.phi.array()[...]-self.obj.phi_old))
         self.delta_energy = abs(subit_stats.delta_energy)
         self.delta_phi = abs(subit_stats.delta_phi)
         subit_stats.elastic_CG_its = strain_solve.nb_fev
@@ -108,12 +104,10 @@ class simulation():
         self.obj.muOutput('timestep.nc',new=True)   
         if(self.obj.comm.rank == 0):
             print('beginning implicit timestepping')
-        #while(delta_energy_timestep > self.delta_energy_tol*self.obj.dt):
         n = 0
         self.obj.dt = self.dt0
-        while((self.stats.coupling_energy > 0.02*self.domain_measure) or
+        while((self.stats.coupling_energy > 0.02*self.domain_measure) and
             (self.delta_energy > self.delta_energy_tol)):
-       # while((self.delta_energy > self.delta_energy_tol*1e-2)):
             n = n+1
             energy_old = self.total_energy
             self.delta_phi = 0.0
@@ -136,13 +130,19 @@ class simulation():
                 print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
                    'delta phi = ', self.delta_phi)
-            if (( self.delta_phi > 10.0) or (n % 10 == 0)):
+            if (n % 10 == 0):
                 if(self.obj.comm.rank == 0):
                     print('saving implicit timestep # ', n,' with energy = ', self.total_energy)
                 self.obj.muOutput('timestep.nc')
             self.obj.phi_old = self.obj.phi.array() + 0.0
+            self.stats.avg_strain = self.avg_strain()
+            self.stats.total_energy = self.total_energy
+            self.stats.delta_phi = self.obj.integrate(self.obj.phi.array()-self.obj.phi_old)
             self.stats.coupling_energy = self.obj.integrate(self.obj.straineng*
                 self.obj.interp.energy(self.obj.phi.array()))
+            if(self.obj.comm.rank == 0):
+                self.stats.dump()
+
 
     def run_simulation(self):
         self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
@@ -155,6 +155,7 @@ class simulation():
                 self.iteration()
             else:
                 self.implicit_iterator()
+                self.strain_step_scalar = 2*self.min_strain_step
             self.stats.avg_strain = self.avg_strain()
             self.stats.total_energy = self.total_energy
             self.stats.delta_phi = self.obj.integrate(self.obj.phi.array()-self.obj.phi_old)
@@ -168,8 +169,8 @@ class simulation():
                 self.stats.dump()
             self.obj.muOutput(self.fullit_outputname)
             #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-            if (((self.stats.coupling_energy < 0.02*self.domain_measure) or
-                (self.stats.delta_phi > self.obj.lens[1]/2)) and (n > self.min_its)):
+            if ((self.stats.coupling_energy < 1e-3*self.domain_measure) and
+               (n > self.min_its)):
                 break
             self.stats.iteration_reset()
             self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar

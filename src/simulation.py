@@ -101,9 +101,6 @@ class simulation():
 
     def implicit_iterator(self):
         delta_energy_timestep = 1e8
-        self.obj.muOutput('timestep.nc',new=True)   
-        if(self.obj.comm.rank == 0):
-            print('beginning implicit timestepping')
         n = 0
         self.obj.dt = self.dt0
         while((self.stats.coupling_energy > 0.02*self.domain_measure) and
@@ -130,10 +127,10 @@ class simulation():
                 print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
                    'delta phi = ', self.delta_phi)
-            if (n % 10 == 0):
+            if ((n % 10 == 0) and (n > 1)):
                 if(self.obj.comm.rank == 0):
                     print('saving implicit timestep # ', n,' with energy = ', self.total_energy)
-                self.obj.muOutput('timestep.nc')
+                self.obj.muOutput(self.fullit_outputname)
             self.obj.phi_old = self.obj.phi.array() + 0.0
             self.stats.avg_strain = self.avg_strain()
             self.stats.total_energy = self.total_energy
@@ -151,18 +148,7 @@ class simulation():
         self.stats = statlog.full_iteration_stats(self.fullit_statsname)
         n = 0
         while (n < self.nmax):
-            if(self.strain_step_scalar > self.min_strain_step):
-                self.iteration()
-            else:
-                self.implicit_iterator()
-                self.strain_step_scalar = 2*self.min_strain_step
-            self.stats.avg_strain = self.avg_strain()
-            self.stats.total_energy = self.total_energy
-            self.stats.delta_phi = self.obj.integrate(self.obj.phi.array()-self.obj.phi_old)
-            self.stats.coupling_energy = self.obj.integrate(self.obj.straineng*
-                self.obj.interp.energy(self.obj.phi.array()))
-
-            self.obj.phi_old = self.obj.phi.array() + 0.0
+            self.implicit_iterator()
             if(self.obj.comm.rank == 0):
                 print('strain: ', self.stats.avg_strain, 'energy: ',
                     self.stats.total_energy,'delta phi',self.stats.delta_phi)

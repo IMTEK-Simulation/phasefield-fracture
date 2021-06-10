@@ -28,13 +28,13 @@ class simulation():
         self.delta_phi = 0.0
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
-        self.strain_step_scalar = 0.0008
-        self.min_strain_step = 0.00005
-        self.min_its = 5
+        self.strain_step_scalar = 0.0002
+        self.min_strain_step = 0.0002
+        self.min_its = 40
         self.dt0 = 2**16
         self.dtmin = 2**(-8)
-        self.dphidt = 0.5
-        self.couplinglim = 2.0
+        self.dphidt = 0.2
+        self.couplinglim = 1.5
 
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -67,44 +67,11 @@ class simulation():
         if(self.obj.comm.rank == 0):
             subit_stats.dump()
         
-    def iteration(self):
-        self.delta_energy = 1.0
-        delta_energy_old = 1e8
-        self.obj.muOutput(self.subit_outputname,new=True)   
-        while(self.delta_energy > self.delta_energy_tol):
-            self.subiteration()
-            if(self.obj.comm.rank == 0):
-                print('delta energy = ', self.delta_energy)
-            if((self.delta_energy > delta_energy_old + self.delta_energy_tol)
-                   and (self.stats.subiterations > 1)):
-                if (self.strain_step_scalar <= self.min_strain_step):
-                    self.obj.F_tot -= self.strain_step_tensor*self.strain_step_scalar
-                    return
-                else:
-                    self.obj.F_tot -= self.strain_step_tensor*self.strain_step_scalar
-                    self.strain_step_scalar /= 2
-                    self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
-                    self.stats.subiterations = 1
-                    delta_energy_old = 1e8
-                    self.obj.phi.array()[...] = self.obj.phi_old + 0.0
-                    if (self.obj.comm.rank == 0):
-                        print('non-monotonicity of energy convergence detected, strain step reduced to ', 
-                          self.strain_step_scalar)
-            else:
-                delta_energy_old = self.delta_energy
-            if((self.stats.subiterations % 20 == 0) 
-              or ((self.delta_energy > 0.000025*self.domain_measure*self.obj.Young) 
-              and (self.stats.subiterations > 1))):
-                if(self.obj.comm.rank == 0):
-                    print('saving subiteration # ', self.stats.subiterations)
-                self.obj.muOutput(self.subit_outputname)
-
     def implicit_iterator(self):
-        delta_energy_timestep = 1e8
+        delta_energy_timestep = 1e8 
         n = 0
         self.obj.dt = self.dt0
-        while((self.stats.coupling_energy > 0.02*self.domain_measure) and
-            (self.delta_energy > self.delta_energy_tol)):
+        while True:
             n = n+1
             energy_old = self.total_energy
             self.delta_phi = 0.0
@@ -122,23 +89,29 @@ class simulation():
             couplingmax = self.obj.max(self.obj.interp.energy(self.obj.phi_old)*self.obj.straineng.array())
             if (couplingmax > self.couplinglim):
                 self.obj.F_tot *= (self.couplinglim/couplingmax)**0.5
-            #self.obj.dt = 0.1
             if (self.obj.comm.rank == 0):
                 print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
                    'delta phi = ', self.delta_phi)
-            if ((n % 10 == 0) and (n > 1)):
-                if(self.obj.comm.rank == 0):
-                    print('saving implicit timestep # ', n,' with energy = ', self.total_energy)
-                self.obj.muOutput(self.fullit_outputname)
             self.obj.phi_old = self.obj.phi.array() + 0.0
             self.stats.avg_strain = self.avg_strain()
             self.stats.total_energy = self.total_energy
             self.stats.delta_phi = self.obj.integrate(self.obj.phi.array()-self.obj.phi_old)
             self.stats.coupling_energy = self.obj.integrate(self.obj.straineng*
                 self.obj.interp.energy(self.obj.phi.array()))
-            if(self.obj.comm.rank == 0):
-                self.stats.dump()
+            if ((n % 10 == 0) and (n > 2)):
+                if(self.obj.comm.rank == 0):
+                    self.stats.dump()
+                    print('saving implicit timestep # ', n,' with energy = ', self.total_energy,
+                        'avg strain = ', self.stats.avg_strain)
+                self.obj.muOutput(self.fullit_outputname)
+            if ((self.delta_energy < self.delta_energy_tol) and 
+                (self.obj.dt == self.dt0 )):
+                if(self.obj.comm.rank == 0):
+                    self.stats.dump()
+                    print('saving implicit timestep # ', n,' with energy = ', self.total_energy,
+                        'avg strain = ', self.stats.avg_strain)
+                break
 
 
     def run_simulation(self):
@@ -149,13 +122,10 @@ class simulation():
         n = 0
         while (n < self.nmax):
             self.implicit_iterator()
-            if(self.obj.comm.rank == 0):
-                print('strain: ', self.stats.avg_strain, 'energy: ',
-                    self.stats.total_energy,'delta phi',self.stats.delta_phi)
-                self.stats.dump()
             self.obj.muOutput(self.fullit_outputname)
-            #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-            if ((self.stats.coupling_energy < 1e-3*self.domain_measure) and
+            if(self.obj.comm.rank == 0):
+                    self.stats.dump()
+            if ((self.stats.coupling_energy < 2e-2*self.domain_measure) and
                (n > self.min_its)):
                 break
             self.stats.iteration_reset()

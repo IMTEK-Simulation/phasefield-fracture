@@ -86,9 +86,9 @@ def ACsmooth2D(field, nits, ACwidth=2**0.5):
     # da/dx = 2*sqrt(f)/e
     # max da/dx = 2sqrt(W/4*1^4)/e = sqrt(W)/e
     # L = delta a/(max da/dx) = 2/(sqrt(W)/e) = 2e/sqrt(W)
-    # use W = 1, e^2 = (ACw/2)^2 -> L = 2*ACw/2/sqrt(1) = ACw
+    # use W = 4/ACw, e^2 = ACw -> L = 2sqrt(ACw)/sqrt(4/ACw) = ACw
     for n in range(0,nits):
-        a -= 0.05*(0.5*(2*a**3-2*a) + (ACwidth/2)**2*(4*a - np.roll(a,1,axis=0) - np.roll(a,-1,axis=0)
+        a -= 0.05*(2*(2*a**3-2*a)/ACwidth + ACwidth*(4*a - np.roll(a,1,axis=0) - np.roll(a,-1,axis=0)
                   - np.roll(a,1,axis=1) - np.roll(a,-1,axis=1)))
     return a
 

@@ -22,19 +22,23 @@ class simulation():
             self.stats.clear()
             dummy_subit_stats.clear()
         self.domain_measure = np.array(obj.lens).prod()
-        self.delta_energy_tol = 1e-5
+        self.delta_energy_tol = 1e-5*self.domain_measure
+        self.coupling_end = 5e-3*self.domain_measure
         self.total_energy = self.obj.objective(self.obj.phi.array())
         self.delta_energy = 0.0
         self.delta_phi = 0.0
+        self.delta_phi_max = 0.0
+        self.couplingmax = 0.0
+        self.phimax = 0.0
         self.energy_old = 0.0
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
         self.strain_step_scalar = 0.0002
         self.min_strain_step = 0.0002
-        self.min_its = 40
+        self.min_its = 10
         self.dt0 = 2**16
         self.dtmin = 2**(-8)
         self.dphidt = 0.2
-        self.couplinglim = 1.5
+        self.couplinglim = 1.1
 
     def avg_strain(self):
         return np.max(np.linalg.eigvals(self.obj.F_tot))
@@ -55,6 +59,7 @@ class simulation():
         phit = time.time()
         subit_stats.delta_energy = self.total_energy - self.energy_old
         subit_stats.delta_phi = self.obj.integrate(phi_solve.result)
+        self.delta_phi_max = self.obj.max(phi_solve.result) 
         self.delta_energy = abs(subit_stats.delta_energy)
         self.delta_phi = abs(subit_stats.delta_phi)
         subit_stats.elastic_CG_its = strain_solve.nb_fev
@@ -77,20 +82,21 @@ class simulation():
             self.delta_phi = 0.0
             while True:
                 self.subiteration(IsImplicit=True)
-                if((self.delta_phi > self.dphidt) and (self.obj.dt > self.dtmin)):
+                if((self.delta_phi_max > self.dphidt) and (self.obj.dt > self.dtmin)):
                     self.obj.dt /= 2
                     if(self.obj.comm.rank == 0):
-                        print('decreasing timestep, delta phi = ', self.delta_phi)
+                        print('decreasing timestep, delta phi max = ', self.delta_phi_max)
                     self.obj.phi.array()[...] = self.obj.phi_old + 0.0
                 else:
-                    if ((self.delta_phi < self.dphidt/2) and (self.obj.dt < self.dt0)):
+                    if ((self.delta_phi_max < self.dphidt/2) and (self.obj.dt < self.dt0)):
                         self.obj.dt *= 2
                     break
-            couplingmax = self.obj.max(self.obj.interp.energy(self.obj.phi_old)*self.obj.straineng.array())
-            if (couplingmax > self.couplinglim):
-                self.obj.F_tot *= (self.couplinglim/couplingmax)**0.5
+            self.couplingmax = self.obj.max(self.obj.interp.energy(self.obj.phi_old)*self.obj.straineng.array())
+            self.phimax = self.obj.max(self.obj.phi)
+            if (self.couplingmax > self.couplinglim):
+                self.obj.F_tot *= (self.couplinglim/self.couplingmax)**0.5
             if (self.obj.comm.rank == 0):
-                print('couplingmax, ', couplingmax, ', dt = ', self.obj.dt)
+                print('couplingmax, ', self.couplingmax, ', dt = ', self.obj.dt, 'delta phi max', self.delta_phi_max)
                 print('energy', self.total_energy, 'delta energy = ', self.delta_energy,
                    'delta phi = ', self.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
@@ -125,10 +131,14 @@ class simulation():
             self.obj.muOutput(self.fullit_outputname)
             if(self.obj.comm.rank == 0):
                     self.stats.dump()
-            if ((self.stats.coupling_energy < 2e-2*self.domain_measure) and
+            if ((self.stats.coupling_energy < self.coupling_end) and
                (n > self.min_its)):
                 break
             self.stats.iteration_reset()
-            self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
+            if (self.phimax > 0.9):
+                self.obj.F_tot += self.strain_step_tensor*max(self.strain_step_scalar, 
+                    np.amax(self.obj.F_tot)*((np.sqrt(self.couplinglim/self.couplingmax)-1)))
+            else:
+                self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
             n += 1
            

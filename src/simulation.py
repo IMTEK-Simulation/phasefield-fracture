@@ -9,107 +9,167 @@ import statlog
 
 class simulation():
     
-    def __init__(self, obj):
+    def __init__(self, obj, time_dependent=False):
         self.obj = obj
         self.nmax = 400
-        self.subit_outputname = 'altmin_subit.nc'
+        self.subit_outputname = 'altmin.nc'
         self.fullit_outputname = 'test.nc'
-        self.subit_statsname = 'stats_subit.json'
-        self.fullit_statsname = 'stats_fullit.json'
-        self.stats = statlog.full_iteration_stats(self.fullit_statsname)
-        dummy_subit_stats = statlog.altmin_iteration_stats(self.subit_statsname, 0.00)
-        if(obj.comm.rank == 0): 
-            self.stats.clear()
-            dummy_subit_stats.clear()
-        self.domain_measure = np.array(obj.lens).prod()
-        self.delta_energy_tol = 1e-6*self.domain_measure
-        self.total_energy = self.obj.objective(self.obj.phi.array())
-        self.delta_energy = 0.0
-        self.energy_old = 0.0
+        self.statsname = 'stats.json'
+        self.paramname = 'simulation.json'
+        
+        self.delta_energy_tol = 1e-6*obj.domain_measure
+        self.dt0 = 2**16
+        self.dtmin = 2**(-16)
+        self.dphidt_lim = 1.0
+        self.overforce_lim = 2.0
+        self.stiffness_end = 0.01*self.obj.Young
+        self.rescaling_flag = False
+
+        self.time_dependent = time_dependent
+        if (time_dependent == False):
+            self.dt0 = 0.0
+            self.dtmin = 0.0
+            self.dphidt_lim = 0.0
+            self.overforce_lim = 0.0
+        
+        self.stats = statlog.stats(self.statsname)
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
-        self.strain_step_scalar = 0.0008
-        self.min_strain_step = 0.00005
-        self.min_its = 5
-        
-    def avg_strain(self):
-        return np.max(np.linalg.eigvals(self.obj.F_tot))
-        
+        self.strain_step_scalar = 0.0002
+        self.min_its = 10
+
     def subiteration(self):
-        subit_stats = statlog.altmin_iteration_stats(self.subit_statsname, self.avg_strain())
-        self.energy_old = self.total_energy
         start = time.time() 
         strain_solve = self.obj.strain_solver()
         straint = time.time()
         self.obj.mechform.get_elastic_coupling(self.obj, strain_solve)
-        phi_solve = self.obj.phi_solver() 
+        self.stats.get_stats_stress(strain_solve.stress,self.obj)
+        self.stats.get_stats_elastic(self.obj)
+        if(self.time_dependent == False):
+            phi_solve = self.obj.phi_solver()
+        else:
+            if ((self.stats.max_overforce > self.overforce_lim) and
+                    (self.rescaling_flag == False) and 
+                    (self.stats.max_overforce > self.overforce_lim)):
+                self.rescaling_flag = True
+            if (self.rescaling_flag == True):
+                ratio = self.rescaleF()
+                self.stats.get_stats_stress(strain_solve.stress*ratio,self.obj)
+            phi_solve = self.obj.phi_implicit_solver()
         self.obj.phi.array()[...] += phi_solve.result
-        self.total_energy = self.obj.objective(self.obj.phi.array())
+        self.stats.get_stats_phi(phi_solve.result, self.obj)
+        self.stats.get_stats_full(self.obj)
         phit = time.time()
-        subit_stats.delta_energy = self.total_energy - self.energy_old
-        self.delta_energy = abs(subit_stats.delta_energy)
-        subit_stats.elastic_CG_its = strain_solve.nb_fev
-        subit_stats.elastic_newton_its = strain_solve.nb_it
-        subit_stats.elastic_time = straint-start
-        subit_stats.phi_subits = phi_solve.n_iterations
-        subit_stats.phi_time = phit-straint
-        self.stats.subiteration_update(subit_stats)
-        subit_stats.subiteration = self.stats.subiterations
-        if(self.obj.comm.rank == 0):
-            subit_stats.dump()
-        
-    def iteration(self):
-        self.delta_energy = 1.0
-        delta_energy_old = 1e8
-        self.obj.muOutput(self.subit_outputname,new=True)   
-        while(self.delta_energy > self.delta_energy_tol):
+        # timing stats
+        self.stats.elastic_CG_its = strain_solve.nb_fev
+        self.stats.elastic_newton_its = strain_solve.nb_it
+        self.stats.elastic_time = straint-start
+        self.stats.phi_subits = phi_solve.n_iterations
+        self.stats.phi_time = phit-straint
+        self.stats.iteration_update()
+
+    def rescaleF(self):
+        phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
+        coupling_target = (self.overforce_lim - phi_only)
+        ratio = (coupling_target/self.stats.coupling_at_ofmax)**0.5
+        if (np.max(np.abs(self.obj.F_tot))*ratio >
+                np.max(np.abs(self.obj.F_tot))+self.strain_step_scalar):
+            ratio = 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
+        self.obj.straineng.array()[...] *= ratio**2
+        self.obj.strain.array()[...] *= ratio
+        self.obj.F_tot *= ratio
+        self.stats.get_stats_elastic(self.obj)
+        return ratio
+
+    def altmin_iteration(self):
+        self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
+        self.stats.subiteration = 0
+        self.stats.delta_energy = 1e8
+        while(abs(self.stats.delta_energy) > self.delta_energy_tol):
             self.subiteration()
             if(self.obj.comm.rank == 0):
-                print('delta energy = ', self.delta_energy)
-            if((self.delta_energy > delta_energy_old + self.delta_energy_tol)
-                   and (self.strain_step_scalar > self.min_strain_step) and (self.stats.subiterations > 1)):
-                self.obj.F_tot -= self.strain_step_tensor*self.strain_step_scalar
-                self.strain_step_scalar /= 2
-                self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
-                self.stats.subiterations = 1
-                delta_energy_old = 1e8
-                self.obj.phi.array()[...] = self.obj.phi_old
-                if (self.obj.comm.rank == 0):
-                    print('non-monotonicity of energy convergence detected, strain step reduced to ', 
-                      self.strain_step_scalar)
-            else:
-                delta_energy_old = self.delta_energy
-            if((self.stats.subiterations % 20 == 0) 
-              or ((self.delta_energy > 0.000025*self.domain_measure*self.obj.Young) 
-              and (self.stats.subiterations > 1))):
+                print('delta energy = ', self.stats.delta_energy,
+                    'delta phi = ',self.stats.delta_phi)
+            if((self.stats.subiteration > 1) and ((self.stats.subiteration % 6 == 0)
+                    or (self.stats.subiteration % 6 == 1)
+                    or (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy))):
                 if(self.obj.comm.rank == 0):
-                    print('saving subiteration # ', self.stats.subiterations)
+                    print('saving subiteration # ', self.stats.subiteration,
+                     'as output number', self.stats.subit_output_index)
+                    self.stats.subit_output_dump()
                 self.obj.muOutput(self.subit_outputname)
+            else:
+                if(self.obj.comm.rank == 0):
+                    statlog.dump(self.stats, self.stats.fname)
+        if(self.obj.comm.rank == 0):
+            print('strain: ', self.stats.strain, 'energy: ',
+                self.stats.total_energy,'delta phi',self.stats.delta_phi)
+            self.stats.output_dump()
+        self.obj.muOutput(self.fullit_outputname)                 
+
+    def timedep_iteration(self):
+        self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
+        self.stats.subiteration = 0
+        self.obj.dt = self.dt0
+        while True:
+            while True:
+                self.subiteration()
+                if((self.stats.delta_phi > self.dphidt_lim) and (self.obj.dt > self.dtmin)):
+                    self.obj.dt /= 2
+                    if(self.obj.comm.rank == 0):
+                        print('decreasing timestep, delta phi = ', self.stats.delta_phi)
+                    self.obj.phi.array()[...] = self.obj.phi_old + 0.0
+                else:
+                    if ((self.stats.delta_phi < self.dphidt_lim/2)
+                            and (self.obj.dt < self.dt0)):
+                        self.obj.dt *= 2
+                    break
+            if (self.obj.comm.rank == 0):
+                print('overforce max, ', self.stats.max_overforce, ', dt = ', self.obj.dt,
+                    'coupling max', self.stats.max_coupling_jac)
+                print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
+                   'delta phi = ', self.stats.delta_phi)
+            self.obj.phi_old = self.obj.phi.array() + 0.0
+            if (((abs(self.stats.delta_energy) < self.delta_energy_tol) and 
+                (self.obj.dt >= self.dt0 )) or (self.stats.stress/self.stats.strain < self.stiffness_end)):
+                if(self.obj.comm.rank == 0):
+                    self.stats.output_dump()
+                    print('saving implicit timestep # ', self.stats.subiteration,
+                        ' with energy = ', self.stats.total_energy,
+                        'avg strain = ', self.stats.strain)
+                self.obj.muOutput(self.fullit_outputname)
+                break
+            if((self.stats.subiteration > 1) and 
+                    ((self.stats.subiteration % 6 == 0) or
+                    (self.stats.subiteration % 6 == 1))):
+                if(self.obj.comm.rank == 0):
+                    self.stats.output_dump()
+                    print('saving implicit timestep # ', self.stats.subiteration,
+                        ' with energy = ', self.stats.total_energy,
+                        'avg strain = ', self.stats.strain)
+                self.obj.muOutput(self.fullit_outputname)
+            else:
+                if(self.obj.comm.rank == 0):
+                    statlog.dump(self.stats, self.stats.fname)
 
     def run_simulation(self):
         self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
         self.obj.phi_old = self.obj.phi.array() + 0.0
         self.obj.muOutput(self.fullit_outputname,new=True)
-        self.stats = statlog.full_iteration_stats(self.fullit_statsname)
+        if (self.time_dependent == False):
+            self.obj.muOutput(self.subit_outputname,new=True)
+        if(self.obj.comm.rank == 0):
+            statlog.clear(self.statsname)
+            self.stats.output_dump()
+            statlog.clear(self.paramname)
+            statlog.dump(self,self.paramname)
         n = 0
         while (n < self.nmax):
-            self.iteration()
-            self.stats.avg_strain = self.avg_strain()
-            self.stats.total_energy = self.total_energy
-            self.stats.delta_phi = self.obj.integrate(self.obj.phi.array()-self.obj.phi_old)
-            self.stats.coupling_energy = self.obj.integrate(self.obj.straineng*
-                self.obj.interp.energy(self.obj.phi.array()))
-
-            self.obj.phi_old = np.maximum(self.obj.phi.array(),self.obj.phi_old)
-            if(self.obj.comm.rank == 0):
-                print('strain: ', self.stats.avg_strain, 'energy: ',
-                    self.stats.total_energy,'delta phi',self.stats.delta_phi)
-                self.stats.dump()
-            self.obj.muOutput(self.fullit_outputname)
-            #obj.crappyIO('fields'+str(n).rjust(2,'0'))
-            if (((self.stats.coupling_energy < 0.02*self.domain_measure) or
-                (self.stats.delta_phi > self.obj.lens[1]/2)) and (n > self.min_its)):
+            self.obj.phi_old = np.maximum(self.obj.phi.array(), self.obj.phi_old)
+            if (self.time_dependent == False):
+                self.altmin_iteration()
+            else:
+                self.timedep_iteration()
+            if (self.stats.stress/self.stats.strain < self.stiffness_end):
                 break
-            self.stats.iteration_reset()
-            self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
             n += 1
-           
+

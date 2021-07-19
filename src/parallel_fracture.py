@@ -2,6 +2,7 @@ import sys
 import time
 import numpy as np
 import os
+import math
 from mpi4py import MPI
 
 mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210331/build/"
@@ -20,6 +21,7 @@ class parallel_fracture():
     def __init__(self, Lx = 10, nx = 63, cfield=None, mechanics_formulation=None, pfmodel=None, Poisson=0.0):
         self.dim = 2
         self.lens = [Lx, Lx] #simulation cell lengths
+        self.domain_measure = np.array(self.lens).prod()
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
         self.dx = np.array([Lx/nx, Lx/nx])
         self.comm = MPI.COMM_WORLD
@@ -66,6 +68,7 @@ class parallel_fracture():
         self.solver_abs_tol = 1e-10
         self.solver_rel_tol = 1e-6
         self.maxiter_cg = 40000
+        self.dt = 1
 
     def initialize_material(self):
         self.material = self.mechform.initialize_material(self)
@@ -90,6 +93,12 @@ class parallel_fracture():
                                  self.phi_old - self.phi.array(), self.comm)
         return solve
     
+    def phi_implicit_solver(self):
+         Jx = -self.jacobian(self.phi.array()) - (self.phi.array() - self.phi_old)/self.dt
+         solve = cCG.constrainedCG(Jx, self.implicit_hessp, Jx,
+                                  self.phi_old - self.phi.array(), self.comm)
+         return solve
+    
     def laplacian(self,x):
         return_arr = np.zeros(self.fftengine.nb_subdomain_grid_pts)
         self.fftengine.fft(x, self.fourier_buffer)
@@ -113,7 +122,33 @@ class parallel_fracture():
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
-        
+
+    def max(self,f):
+         return self.comm.allreduce(np.max(f),MPI.MAX)
+    
+    def value_at_max(self,f,g):
+        maxval = self.max(f)
+        maxg = 0.0
+        maxind = np.argmax(f)
+        maxloc = np.unravel_index(maxind, self.fftengine.nb_subdomain_grid_pts, order='C')
+        if (math.isclose(np.max(f[maxloc]), maxval)):
+            maxg = g[maxloc]
+        maxg_all = self.max(maxg)
+        return maxg_all
+    
+    def argmax(self,f):
+        x = -np.ones(self.dim)
+        maxind = np.argmax(f)
+        maxloc = np.unravel_index(maxind, self.fftengine.nb_subdomain_grid_pts, order='C')
+        maxval = self.max(f)
+        if (math.isclose(np.max(f[maxloc]), maxval)):
+            for i in range(0,self.dim):
+                x[i] = self.fftengine.subdomain_locations[i] + maxloc[i]
+        xall = np.zeros(self.dim)
+        for i in range(0,self.dim):
+            xall[i] = self.max(x[i])
+        return xall
+
     def objective(self,x):
         return self.integrate(self.energy_density(x))
 
@@ -122,6 +157,9 @@ class parallel_fracture():
 
     def hessp(self,p):
         return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) 
+
+    def implicit_hessp(self,p):
+        return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) + p/self.dt
 
     def muOutput(self,fname,new=False):
         comm = muGrid.Communicator(self.comm)

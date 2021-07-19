@@ -49,7 +49,7 @@ class simulation():
         else:
             if ((self.stats.max_overforce > self.overforce_lim) and
                     (self.rescaling_flag == False) and 
-                    (self.stats.max_overforce > self.overforce_lim)):
+                    (self.stats.coupling_at_ofmax > 1.0)):
                 self.rescaling_flag = True
             if (self.rescaling_flag == True):
                 ratio = self.rescaleF()
@@ -140,7 +140,8 @@ class simulation():
                 break
             if((self.stats.subiteration > 1) and 
                     ((self.stats.subiteration % 6 == 0) or
-                    (self.stats.subiteration % 6 == 1))):
+                    (self.stats.subiteration % 6 == 1) or 
+                    (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy)))):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
                     print('saving implicit timestep # ', self.stats.subiteration,

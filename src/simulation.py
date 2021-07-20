@@ -141,7 +141,7 @@ class simulation():
             if((self.stats.subiteration > 1) and 
                     ((self.stats.subiteration % 6 == 0) or
                     (self.stats.subiteration % 6 == 1) or 
-                    (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy)))):
+                    (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy))):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
                     print('saving implicit timestep # ', self.stats.subiteration,

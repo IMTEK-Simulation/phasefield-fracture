@@ -6,9 +6,10 @@ import time
 
 class constrainedCG():
 
-    def __init__(self, x_in,A,b,field_constraint, comm, maxiter = 20000, cg_tol = 1e-10, verbose=False):
+    def __init__(self, x_in,A,b,field_constraint, comm, maxiter = 20000, cg_abs_tol = 1e-6, cg_rel_tol = 1e-6, verbose=False):
         self.name = "constrainedCG"
         start = time.time()
+        self.n_iterations = 0
         
         x = np.copy(x_in)
         mask_neg = x <= field_constraint    # Vollebregt step 2 
@@ -20,7 +21,6 @@ class constrainedCG():
                 print('Entire set is constrained and feasible.  Terminating early.')
             self.time = time.time() - start
             self.result = x
-            self.n_iterations = 0
             self.residual = 0.0
             return
    
@@ -31,14 +31,13 @@ class constrainedCG():
         p = -r
     
         # check for early termination: residual meets tolerance
-        rmax = comm.allreduce(np.max(abs(r)),MPI.MAX)
-        if (rmax <= cg_tol):
+        rnorm = np.sqrt(comm.allreduce((r*np.conjugate(r)).sum(),MPI.SUM))
+        self.residual = rnorm
+        if (rnorm <= cg_abs_tol):
             if ((comm.rank == 0) and (verbose)):
                 print('Residual meets tolerance before iteration.  Terminating early.')
             self.time = time.time() - start
             self.result = x
-            self.n_iterations = 0
-            self.residual = rmax
             return
     
         for i in range (1, maxiter+1):
@@ -54,16 +53,16 @@ class constrainedCG():
             mask_res = r > 0        # Vollebregt step 3a, again
             mask_bounded = np.logical_and(mask_neg,mask_res)
             r[mask_bounded] = 0.0
-            rmax = comm.allreduce(np.max(abs(r)),MPI.MAX)
+            rnorm = np.sqrt(comm.allreduce((r*np.conjugate(r)).sum(),MPI.SUM))
             if ((comm.rank == 0) and (verbose)):
-                print('Iteration {}, max residual is {}'.format(i+1, rmax))
-            if(rmax <= cg_tol):
+                print('Iteration {}, max residual is {}'.format(i+1, rnorm))
+            if(( rnorm/self.residual <= cg_rel_tol) or (rnorm <= cg_abs_tol)):
                 if ((comm.rank == 0) and (verbose)):
-                    print('CG converged after {} iterations with max residual {}'.format(i+1, rmax))
+                    print('CG converged after {} iterations with residual norm {}'.format(i+1, rnorm))
                 self.time = time.time() - start
                 self.result = x
                 self.n_iterations = i+1
-                self.residual = rmax
+                self.residual = rnorm
                 return
             beta =  comm.allreduce((r*(r - r_old)).sum(),MPI.SUM) / (alpha*denominator_temp) # Vollebregt step 3, modified per Eq. 16
             p_old = p

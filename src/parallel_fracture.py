@@ -65,7 +65,7 @@ class parallel_fracture():
             self.bulk = pfmodel
 
         self.solver_CG_tol = 1e-4
-        self.solver_abs_tol = 1e-10
+        self.solver_abs_tol = 1e-6
         self.solver_rel_tol = 1e-6
         self.maxiter_cg = 40000
         self.dt = 1

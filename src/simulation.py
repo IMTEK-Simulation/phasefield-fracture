@@ -12,17 +12,19 @@ class simulation():
     def __init__(self, obj, time_dependent=False):
         self.obj = obj
         self.nmax = 400
+        self.mmax = 5
         self.subit_outputname = 'altmin.nc'
         self.fullit_outputname = 'test.nc'
         self.statsname = 'stats.json'
         self.paramname = 'simulation.json'
         
-        self.delta_energy_tol = 1e-6*obj.domain_measure
+     #   self.delta_energy_tol = 1e-6*obj.domain_measure
+        self.delta_phi_tol = 1e-3
         self.dt0 = 2**16
         self.dtmin = 2**(-16)
         self.dphidt_lim = 1.0
         self.overforce_lim = 2.0
-        self.stiffness_end = 0.01*self.obj.Young
+        self.stiffness_end = 1.1*self.obj.Young*self.obj.ksmall*self.obj.nb_grid_pts[0]
         self.rescaling_flag = False
 
         self.time_dependent = time_dependent
@@ -31,6 +33,7 @@ class simulation():
             self.dtmin = 0.0
             self.dphidt_lim = 0.0
             self.overforce_lim = 0.0
+            self.delta_phi_tol = 0.0
         
         self.stats = statlog.stats(self.statsname)
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
@@ -83,8 +86,8 @@ class simulation():
     def altmin_iteration(self):
         self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
         self.stats.subiteration = 0
-        self.stats.delta_energy = 1e8
-        while(abs(self.stats.delta_energy) > self.delta_energy_tol):
+        self.stats.delta_phi = 1e8
+        while(abs(self.stats.delta_phi) > self.delta_phi_tol):
             self.subiteration()
             if(self.obj.comm.rank == 0):
                 print('delta energy = ', self.stats.delta_energy,
@@ -129,8 +132,8 @@ class simulation():
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
-            if (((abs(self.stats.delta_energy) < self.delta_energy_tol) and 
-                (self.obj.dt >= self.dt0 )) or (self.stats.stress/self.stats.strain < self.stiffness_end)):
+            if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
+                    (self.obj.dt >= self.dt0 )):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
                     print('saving implicit timestep # ', self.stats.subiteration,
@@ -141,7 +144,7 @@ class simulation():
             if((self.stats.subiteration > 1) and 
                     ((self.stats.subiteration % 6 == 0) or
                     (self.stats.subiteration % 6 == 1) or 
-                    (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy))):
+                    (abs(self.stats.delta_energy) > 0.04*self.stats.total_energy))):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
                     print('saving implicit timestep # ', self.stats.subiteration,
@@ -164,13 +167,19 @@ class simulation():
             statlog.clear(self.paramname)
             statlog.dump(self,self.paramname)
         n = 0
-        while (n < self.nmax):
+        m = 0
+        while ((n < self.nmax) and (m < self.mmax)):
             self.obj.phi_old = np.maximum(self.obj.phi.array(), self.obj.phi_old)
             if (self.time_dependent == False):
                 self.altmin_iteration()
             else:
                 self.timedep_iteration()
+            if ((n==0) and (self.stiffness_end==0)):
+                self.stiffness_end = (self.stats.stress/self.stats.strain*
+                        1.1*self.obj.ksmall*self.obj.nb_grid_pts[0])
             if (self.stats.stress/self.stats.strain < self.stiffness_end):
-                break
+                m += 1 
             n += 1
 
+        if(self.obj.comm.rank == 0):
+            statlog.dump(self,self.paramname)

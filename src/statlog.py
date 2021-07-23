@@ -85,7 +85,7 @@ class stats():
         self.avg_yy_stress = obj.integrate(stressyy)/obj.domain_measure
         self.avg_xy_stress = obj.integrate(stressxy)/obj.domain_measure
         self.avg_xx_stress = obj.integrate(stressxx)/obj.domain_measure
-        self.stress = max(self.avg_yy_stress, self.avg_xy_stress, self.avg_xx_stress)
+        self.stress = max(self.avg_yy_stress, abs(self.avg_xy_stress), self.avg_xx_stress)
         self.max_yy_stress = obj.max(stressyy)
         self.max_xy_stress = obj.max(stressxy)
         self.max_xx_stress = obj.max(stressxx)
@@ -94,7 +94,7 @@ class stats():
         self.avg_yy_strain = obj.F_tot[1,1]
         self.avg_xy_strain = (obj.F_tot[0,1] + obj.F_tot[1,0])/2
         self.avg_xx_strain = obj.F_tot[0,0]
-        self.strain =  max(self.avg_yy_strain, self.avg_xy_strain,self.avg_xx_strain)
+        self.strain =  max(self.avg_yy_strain, abs(self.avg_xy_strain),self.avg_xx_strain)
         self.max_yy_strain = obj.max(obj.strain.array()[3,0,:,:])
         self.max_xy_strain = obj.max(obj.strain.array()[2,0,:,:])
         self.max_xx_strain = obj.max(obj.strain.array()[0,0,:,:])

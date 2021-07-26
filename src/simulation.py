@@ -33,7 +33,6 @@ class simulation():
             self.dtmin = 0.0
             self.dphidt_lim = 0.0
             self.overforce_lim = 0.0
-            self.delta_phi_tol = 0.0
         
         self.stats = statlog.stats(self.statsname)
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])

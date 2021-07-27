@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/quasistatic-parallel-2D/src")
+sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/combined/src")
 import makestruct
 import mechanics
 import model_components
@@ -11,48 +11,45 @@ import os
 import json
 import time
 
-
-def init_crack(obj):
-    vals = np.zeros_like(obj.phi.array())
-    for ind, val in np.ndenumerate(vals):
-        coords = (np.array(ind) + np.array(obj.fftengine.subdomain_locations))*obj.dx
-        val = 0.0
-        distcoord = np.abs(coords - np.array(obj.lens)/2)
-        distcoord[0] = max(distcoord[0]-1.0,0)
-        dist = np.sqrt(np.sum(distcoord**2))  - obj.dx[0]/4.0
-        if (dist < 2.0**0.5):
-            val = (1.0-dist/2.0**0.5)**2
-        if (dist < 0):
-            val = 1.0
-        vals[ind] = val
-    return vals
-
-
 nx=63
 Lx=20
 
-f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx)
-f.strain_step_tensor = np.array([[0,0],[0,1.0]])
-f.solver_tol = 1e-6
+f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx,
+        mechanics_formulation=mechanics.anisotropic_tc(),
+        pfmodel=model_components.AT1(),Poisson=0.2)
+
 f.title = 'test'
+
+def init_crack(obj):
+    vals = np.zeros_like(obj.phi.array())
+    radius = 4
+    for ind, val in np.ndenumerate(vals):
+        coords = (np.array(ind) + np.array(obj.fftengine.subdomain_locations))*obj.dx
+        val = 0.0
+        distcoord = np.zeros_like(coords)
+        distcoord[0] = max(np.abs(coords[0] - np.array(obj.lens[0])/2)-obj.lens[0]/4,0)
+        distcoord[1] = max(np.abs(coords[1] - obj.lens[1]/2 - obj.dx[1]/2),0)
+        dist = np.sqrt(np.sum(distcoord**2))
+        if (dist < 2.0**0.5):
+            val = (1.0-dist/2.0**0.5)**2
+        vals[ind] = val
+    return vals
+
 f.phi.array()[...] = init_crack(f)
 
-structobj = makestruct.randomfield(Lx=Lx,nx=nx,lamb=2,sigma=0.3,mu=1,minimum_val=0)
-#if(f.comm.rank == 0):
-#    structobj.makestruct2D()
-#f.comm.barrier()
-#f.Cx.array()[...] = f.initialize_serial('teststruct.npy')*f.Young
-#f.Cx.array()[...] = (1.0-init_crack(f))**2*f.Young
+#f.Cx.array()[...] = f.initialize_serial('../noise1023.npy')*f.Young
+f.initialize_material()
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')
     json.dump(f.__dict__,jsonfile,default=lambda o: "(array)")
     jsonfile.close()
 
-f.initialize_material()
-
 startt = time.time()
-sim = simulation.simulation(f)
-sim.delta_energy_tol = 1e-4
+sim = simulation.simulation(f, time_dependent=True)
+sim.overforce_lim=2
+sim.strain_step_scalar = 0.0001
+sim.min_its = 10
+sim.strain_step_tensor = np.array([[0,0],[0,1]])
 sim.run_simulation()
 endt = time.time()
 

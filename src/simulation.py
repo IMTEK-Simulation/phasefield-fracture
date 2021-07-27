@@ -73,9 +73,9 @@ class simulation():
         phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
         coupling_target = (self.overforce_lim - phi_only)
         ratio = (coupling_target/self.stats.coupling_at_ofmax)**0.5
-        if (np.max(np.abs(self.obj.F_tot))*ratio >
-                np.max(np.abs(self.obj.F_tot))+self.strain_step_scalar):
-            ratio = 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
+     #   if (np.max(np.abs(self.obj.F_tot))*ratio >
+     #           np.max(np.abs(self.obj.F_tot))+self.strain_step_scalar):
+     #       ratio = 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
         self.obj.straineng.array()[...] *= ratio**2
         self.obj.strain.array()[...] *= ratio
         self.obj.F_tot *= ratio

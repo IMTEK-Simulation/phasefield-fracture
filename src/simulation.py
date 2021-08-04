@@ -24,7 +24,7 @@ class simulation():
         self.dtmin = 2**(-16)
         self.dphidt_lim = 1.0
         self.overforce_lim = 2.0
-        self.stiffness_end = 1.1*self.obj.Young*self.obj.ksmall*self.obj.nb_grid_pts[0]
+        self.stiffness_end = 0.01
         self.rescaling_flag = False
 
         self.time_dependent = time_dependent
@@ -73,9 +73,7 @@ class simulation():
         phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
         coupling_target = (self.overforce_lim - phi_only)
         ratio = (coupling_target/self.stats.coupling_at_ofmax)**0.5
-     #   if (np.max(np.abs(self.obj.F_tot))*ratio >
-     #           np.max(np.abs(self.obj.F_tot))+self.strain_step_scalar):
-     #       ratio = 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
+        ratio = min(ratio, 1.0)
         self.obj.straineng.array()[...] *= ratio**2
         self.obj.strain.array()[...] *= ratio
         self.obj.F_tot *= ratio
@@ -127,7 +125,7 @@ class simulation():
                     break
             if (self.obj.comm.rank == 0):
                 print('overforce max, ', self.stats.max_overforce, ', dt = ', self.obj.dt,
-                    'coupling max', self.stats.max_coupling_jac)
+                    'coupling max', self.stats.max_coupling_en)
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
@@ -166,19 +164,16 @@ class simulation():
             statlog.clear(self.paramname)
             statlog.dump(self,self.paramname)
         n = 0
-        m = 0
-        while ((n < self.nmax) and (m < self.mmax)):
+        while ((n < self.nmax)):
             self.obj.phi_old = np.maximum(self.obj.phi.array(), self.obj.phi_old)
             if (self.time_dependent == False):
                 self.altmin_iteration()
             else:
                 self.timedep_iteration()
-            if ((n==0) and (self.stiffness_end==0)):
-                self.stiffness_end = (self.stats.stress/self.stats.strain*
-                        1.1*self.obj.ksmall*self.obj.nb_grid_pts[0])
             if (self.stats.stress/self.stats.strain < self.stiffness_end):
-                m += 1 
+                break
             n += 1
 
         if(self.obj.comm.rank == 0):
             statlog.dump(self,self.paramname)
+

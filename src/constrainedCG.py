@@ -75,5 +75,5 @@ class constrainedCG():
         self.time = time.time() - start
         self.result = x
         self.n_iterations = i+1
-        self.residual = rmax
+        self.residual = rnorm
         return

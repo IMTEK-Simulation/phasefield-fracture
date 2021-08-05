@@ -5,11 +5,6 @@ import os
 import math
 from mpi4py import MPI
 
-mu_build_path = "/home/fr/fr_fr/fr_wa1005/muspectre_stuff/builds/muspectre-20210331/build/"
-sys.path.append(mu_build_path + '/language_bindings/python')
-sys.path.append(mu_build_path + '/language_bindings/libmufft/python')
-sys.path.append(mu_build_path + '/language_bindings/libmugrid/python')
-
 import muSpectre as msp
 import muFFT
 import muGrid
@@ -25,8 +20,8 @@ class parallel_fracture():
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
         self.dx = np.array([Lx/nx, Lx/nx])
         self.comm = MPI.COMM_WORLD
-        
-        self.ksmall = 1e-4
+        self.Gc = 1.0
+        self.ksmall = 0.0
         self.Young = 10000.0
         self.Poisson = Poisson
         self.lamb_factor = self.Poisson/(1+self.Poisson)/(1-2*self.Poisson)
@@ -116,9 +111,6 @@ class parallel_fracture():
                 *self.dx[d]*self.fourier_buffer, tempfield)
             return_arr += tempfield**2
         return return_arr*self.fftengine.normalisation**2
-        
-    def energy_density(self,x):
-        return (self.mechform.get_elastic_energy(self) + self.bulk.energy(x) + 0.5*self.grad2(x))
 
     def integrate(self,f):
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
@@ -148,18 +140,27 @@ class parallel_fracture():
         for i in range(0,self.dim):
             xall[i] = self.max(x[i])
         return xall
+    
+    def fracture_energy_density(self,x):
+        return self.Gc/self.bulk.cw*(self.bulk.energy(x) + self.grad2(x))
+
+    def energy_density(self,x):
+        return (self.mechform.get_elastic_energy(self) + fracture_energy_density(self,x))
 
     def objective(self,x):
         return self.integrate(self.energy_density(x))
 
     def jacobian(self,x):
-        return self.interp.jac(x)*self.straineng.array() + self.bulk.jac(x) - self.laplacian(x)
+        return (self.interp.jac(x)*self.straineng.array() +
+               self.Gc/self.bulk.cw*(self.bulk.jac(x) - 2.0*self.laplacian(x)))
 
     def hessp(self,p):
-        return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) 
+        return (self.interp.hessp(p)*self.straineng.array() +
+               self.Gc/self.bulk.cw*(self.bulk.hessp(p) - 2.0*self.laplacian(p)))
 
     def implicit_hessp(self,p):
-        return self.interp.hessp(p)*self.straineng.array() + self.bulk.hessp(p) - self.laplacian(p) + p/self.dt
+        return (self.interp.hessp(p)*self.straineng.array() +
+               self.Gc/self.bulk.cw*(self.bulk.hessp(p) - 2.0*self.laplacian(p)) + p/self.dt)
 
     def muOutput(self,fname,new=False):
         comm = muGrid.Communicator(self.comm)

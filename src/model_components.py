@@ -3,6 +3,7 @@ import numpy as np
 class AT1():
     def __init__(self):
         self.name = "AT1"
+        self.cw = 8.0/3.0
     
     def energy(self, x):
         return x
@@ -16,15 +17,16 @@ class AT1():
 class AT2():
     def __init__(self):
         self.name = "AT2"
+        self.cw = 2.0
         
     def energy(self, x):
-        return (16.0/9.0)*x**2
+        return x**2
         
     def jac(self,x):
-        return (32.0/9.0)*x
+        return 2*x
         
     def hessp(self,p):
-        return (32.0/9.0)*p
+        return 2*p
         
 
 class interp1():
@@ -40,3 +42,4 @@ class interp1():
         
     def hessp(self,p):
         return 2*(1-self.ksmall)*p
+

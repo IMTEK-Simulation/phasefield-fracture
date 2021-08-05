@@ -22,9 +22,9 @@ class simulation():
         self.delta_phi_tol = 1e-3
         self.dt0 = 2**16
         self.dtmin = 2**(-16)
-        self.dphidt_lim = 1.0
-        self.overforce_lim = 2.0
-        self.stiffness_end = 0.01
+        self.dphidt_lim = 1.5
+        self.overforce_lim = 0.75
+        self.stiffness_end = 100.0
         self.rescaling_flag = False
 
         self.time_dependent = time_dependent
@@ -128,6 +128,8 @@ class simulation():
                     'coupling max', self.stats.max_coupling_en)
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
+                print('fracture energy, subtraction', self.stats.total_fracture_energy,
+                   'fracture energy, new calc.', obj.integrate(obj.fracture_energy_density(obj.phi.array())))
             self.obj.phi_old = self.obj.phi.array() + 0.0
             if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
                     (self.obj.dt >= self.dt0 )):
@@ -170,6 +172,8 @@ class simulation():
                 self.altmin_iteration()
             else:
                 self.timedep_iteration()
+            if(self.obj.comm.rank == 0):
+                print("effective stiffness :", self.stats.stress/self.stats.strain)
             if (self.stats.stress/self.stats.strain < self.stiffness_end):
                 break
             n += 1

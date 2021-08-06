@@ -20,26 +20,24 @@ def plot_stat(datalist, xkey, ykey, xlabel, ylabel,plotname):
 
 mpl.rc('lines', markerfacecolor='None', markersize=4)
 
-keynames = ["strain", "stress", "max_overforce", "max_yy_stress","max_delta_phi","delta_phi"]
+keynames = ["strain", "stress", "max_overforce", "max_yy_stress","max_delta_phi","delta_phi",
+    "total_elastic_energy", "total_energy", "total_fracture_energy"]
 
 
-dir = '../../muspectre_misc'
 maxind = 1100
-data = get_stats.get_data(dir, keynames, maxind, output_dup=True)
-data["label"] = "Alt. Min."
+fdir = '../../muspectre_misc'
+data = get_stats.get_data(fdir, keynames, maxind, output_dup=True)
+data["label"] = "Alternating Minimization"
 data["iteration"] = np.array(range(0,data["strain"].size))
 data["marker"] = None
 data["linestyle"] = '-'
 datalist = [data]
 
-ykeys = ["stress", "max_overforce", "max_yy_stress","max_delta_phi","delta_phi"]
-xkeys = ["strain", "iteration", "iteration","iteration","iteration"]
-xlabels = [r"$\bar \varepsilon_{yy}$", "Iteration", "Iteration","Iteration","Iteration"]
-ylabels = ["Average yy stress", "Maximum overforce", "Maximum yy stress",
-        r"Maximum $\Delta \phi$",r"Integrated $\Delta \phi$"]
-plotnames = ["stress.svg", "max_overforce.svg",
-    "max_yy_stress.svg","max_delta_phi.svg","delta_phi.svg"]
-        
-for i in range(0,len(xkeys)):
-    plot_stat(datalist, xkeys[i], ykeys[i], xlabels[i], ylabels[i],plotnames[i])
+
+plot_stat(datalist, "strain", "stress", r"Average yy Strain", "Average yy Stress", "stress.svg")
+plot_stat(datalist,  "iteration", "max_overforce", "Iteration", "Maximum Overforce", "max_overforce.svg")
+plot_stat(datalist,  "iteration", "total_fracture_energy", "Iteration", "Total Fracture Energy", "fracture_energy.svg")
+plot_stat(datalist,  "iteration", "total_elastic_energy", "Iteration", "Total Elastic Energy", "total_energy.svg")
+plot_stat(datalist,  "iteration", "total_energy", "Iteration", "Total Energy", "total_elastic_energy.svg")
+
 

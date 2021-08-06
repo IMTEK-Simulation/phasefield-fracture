@@ -16,6 +16,7 @@ class simulation():
         self.subit_outputname = 'altmin.nc'
         self.fullit_outputname = 'test.nc'
         self.statsname = 'stats.json'
+        self.timingname = 'timing.json'
         self.paramname = 'simulation.json'
         
      #   self.delta_energy_tol = 1e-6*obj.domain_measure
@@ -34,7 +35,8 @@ class simulation():
             self.dphidt_lim = 0.0
             self.overforce_lim = 0.0
         
-        self.stats = statlog.stats(self.statsname)
+        self.stats = statlog.stats(self.statsname, obj)
+        self.timing = statlog.timing(self.timingname)
         self.strain_step_tensor = np.array([[0,0],[0,1.0]])
         self.strain_step_scalar = 0.0002
         self.min_its = 10
@@ -62,12 +64,12 @@ class simulation():
         self.stats.get_stats_full(self.obj)
         phit = time.time()
         # timing stats
-        self.stats.elastic_CG_its = strain_solve.nb_fev
-        self.stats.elastic_newton_its = strain_solve.nb_it
-        self.stats.elastic_time = straint-start
-        self.stats.phi_subits = phi_solve.n_iterations
-        self.stats.phi_time = phit-straint
-        self.stats.iteration_update()
+        self.timing.elastic_CG_its = strain_solve.nb_fev
+        self.timing.elastic_newton_its = strain_solve.nb_it
+        self.timing.elastic_time = straint-start
+        self.timing.phi_subits = phi_solve.n_iterations
+        self.timing.phi_time = phit-straint
+        self.timing.iteration_update()
 
     def rescaleF(self):
         phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
@@ -77,16 +79,18 @@ class simulation():
         self.obj.straineng.array()[...] *= ratio**2
         self.obj.strain.array()[...] *= ratio
         self.obj.F_tot *= ratio
-        self.stats.get_stats_elastic(self.obj)
+        self.stats.get_stats_rescale(self.obj, ratio)
         return ratio
 
     def altmin_iteration(self):
         self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
         self.stats.subiteration = 0
+        self.timing.subiteration = 0
         self.stats.delta_phi = 1e8
         while(abs(self.stats.delta_phi) > self.delta_phi_tol):
             self.subiteration()
             if(self.obj.comm.rank == 0):
+                statlog.dump(self.timing, self.timingname)
                 print('delta energy = ', self.stats.delta_energy,
                     'delta phi = ',self.stats.delta_phi)
             if((self.stats.subiteration > 1) and ((self.stats.subiteration % 6 == 0)
@@ -99,7 +103,7 @@ class simulation():
                 self.obj.muOutput(self.subit_outputname)
             else:
                 if(self.obj.comm.rank == 0):
-                    statlog.dump(self.stats, self.stats.fname)
+                    statlog.dump(self.stats, self.statsname)
         if(self.obj.comm.rank == 0):
             print('strain: ', self.stats.strain, 'energy: ',
                 self.stats.total_energy,'delta phi',self.stats.delta_phi)
@@ -109,6 +113,7 @@ class simulation():
     def timedep_iteration(self):
         self.obj.F_tot += self.strain_step_tensor*self.strain_step_scalar
         self.stats.subiteration = 0
+        self.timing.subiteration = 0
         self.obj.dt = self.dt0
         while True:
             while True:
@@ -124,12 +129,11 @@ class simulation():
                         self.obj.dt *= 2
                     break
             if (self.obj.comm.rank == 0):
+                statlog.dump(self.timing, self.timingname)
                 print('overforce max, ', self.stats.max_overforce, ', dt = ', self.obj.dt,
-                    'coupling max', self.stats.max_coupling_en)
+                    'excess energy', self.stats.excess_energy)
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
-                print('fracture energy, subtraction', self.stats.total_fracture_energy,
-                   'fracture energy, new calc.', obj.integrate(obj.fracture_energy_density(obj.phi.array())))
             self.obj.phi_old = self.obj.phi.array() + 0.0
             if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
                     (self.obj.dt >= self.dt0 )):

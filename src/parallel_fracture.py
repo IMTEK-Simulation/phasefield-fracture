@@ -141,11 +141,11 @@ class parallel_fracture():
             xall[i] = self.max(x[i])
         return xall
     
-    def fracture_energy_density(self,x):
+    def fracture_energy(self,x):
         return self.Gc/self.bulk.cw*(self.bulk.energy(x) + self.grad2(x))
 
     def energy_density(self,x):
-        return (self.mechform.get_elastic_energy(self) + fracture_energy_density(self,x))
+        return (self.mechform.get_elastic_energy(self) + self.fracture_energy(x))
 
     def objective(self,x):
         return self.integrate(self.energy_density(x))

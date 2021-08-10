@@ -131,7 +131,7 @@ class simulation():
             if (self.obj.comm.rank == 0):
                 statlog.dump(self.timing, self.timingname)
                 print('overforce max, ', self.stats.max_overforce, ', dt = ', self.obj.dt,
-                    'excess energy', self.stats.excess_energy)
+                    'fracture energy', self.stats.total_fracture_energy)
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
@@ -159,8 +159,11 @@ class simulation():
                     statlog.dump(self.stats, self.stats.fname)
 
     def run_simulation(self):
-        self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
         self.obj.phi_old = self.obj.phi.array() + 0.0
+        phi_solve = self.obj.phi_solver()
+        self.obj.phi.array()[...] += phi_solve.result
+        self.obj.phi_old = self.obj.phi.array() + 0.0
+        self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
         self.obj.muOutput(self.fullit_outputname,new=True)
         if (self.time_dependent == False):
             self.obj.muOutput(self.subit_outputname,new=True)

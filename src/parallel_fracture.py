@@ -108,7 +108,7 @@ class parallel_fracture():
         for d in range(0,self.dim):
             diffop = muFFT.FourierDerivative(self.dim, d)
             self.fftengine.ifft( diffop.fourier(self.fftengine.fftfreq)
-                *self.dx[d]*self.fourier_buffer, tempfield)
+                /self.dx[d]*self.fourier_buffer, tempfield)
             return_arr += tempfield**2
         return return_arr*self.fftengine.normalisation**2
 

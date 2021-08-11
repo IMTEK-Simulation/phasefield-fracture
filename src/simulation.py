@@ -13,6 +13,7 @@ class simulation():
         self.obj = obj
         self.nmax = 400
         self.mmax = 5
+        self.output_n = 6
         self.subit_outputname = 'altmin.nc'
         self.fullit_outputname = 'test.nc'
         self.statsname = 'stats.json'
@@ -75,6 +76,8 @@ class simulation():
         phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
         coupling_target = (self.overforce_lim - phi_only)
         ratio = (coupling_target/self.stats.coupling_at_ofmax)**0.5
+        ratio = min(ratio, 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
+        if (np.max(np.abs(self.obj.F_tot))*ratio >
         ratio = min(ratio, 1.0)
         self.obj.straineng.array()[...] *= ratio**2
         self.obj.strain.array()[...] *= ratio
@@ -93,8 +96,8 @@ class simulation():
                 statlog.dump(self.timing, self.timingname)
                 print('delta energy = ', self.stats.delta_energy,
                     'delta phi = ',self.stats.delta_phi)
-            if((self.stats.subiteration > 1) and ((self.stats.subiteration % 6 == 0)
-                    or (self.stats.subiteration % 6 == 1)
+            if((self.stats.subiteration > 1) and ((self.stats.subiteration % self.output_n == 0)
+                    or (self.stats.subiteration % self.output_n == 1)
                     or (abs(self.stats.delta_energy) > 0.02*self.stats.total_energy))):
                 if(self.obj.comm.rank == 0):
                     print('saving subiteration # ', self.stats.subiteration,
@@ -145,8 +148,8 @@ class simulation():
                 self.obj.muOutput(self.fullit_outputname)
                 break
             if((self.stats.subiteration > 1) and 
-                    ((self.stats.subiteration % 6 == 0) or
-                    (self.stats.subiteration % 6 == 1) or 
+                    ((self.stats.subiteration % self.output_n == 0) or
+                    (self.stats.subiteration % self.output_n == 1) or 
                     (abs(self.stats.delta_energy) > 0.04*self.stats.total_energy))):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
@@ -157,6 +160,10 @@ class simulation():
             else:
                 if(self.obj.comm.rank == 0):
                     statlog.dump(self.stats, self.stats.fname)
+        if (self.stats.stress/self.stats.strain < self.stiffness_end):
+            if(self.obj.comm.rank == 0):
+                print("effective stiffness :", self.stats.stress/self.stats.strain)
+            break
 
     def run_simulation(self):
         self.obj.phi_old = self.obj.phi.array() + 0.0

@@ -11,7 +11,7 @@ class simulation():
     
     def __init__(self, obj, time_dependent=False):
         self.obj = obj
-        self.nmax = 400
+        self.nmax = 1000
         self.mmax = 5
         self.output_n = 6
         self.subit_outputname = 'altmin.nc'
@@ -76,9 +76,7 @@ class simulation():
         phi_only = (self.stats.max_overforce - self.stats.coupling_at_ofmax)
         coupling_target = (self.overforce_lim - phi_only)
         ratio = (coupling_target/self.stats.coupling_at_ofmax)**0.5
-        ratio = min(ratio, 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot))
-        if (np.max(np.abs(self.obj.F_tot))*ratio >
-        ratio = min(ratio, 1.0)
+        ratio = min(ratio, 1 + self.strain_step_scalar/np.max(np.abs(self.obj.F_tot)))
         self.obj.straineng.array()[...] *= ratio**2
         self.obj.strain.array()[...] *= ratio
         self.obj.F_tot *= ratio
@@ -138,14 +136,23 @@ class simulation():
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
-            if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
-                    (self.obj.dt >= self.dt0 )):
+            if (self.stats.stress/self.stats.strain < self.stiffness_end):
                 if(self.obj.comm.rank == 0):
                     self.stats.output_dump()
                     print('saving implicit timestep # ', self.stats.subiteration,
                         ' with energy = ', self.stats.total_energy,
                         'avg strain = ', self.stats.strain)
                 self.obj.muOutput(self.fullit_outputname)
+            if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
+                     (self.obj.dt >= self.dt0 )):
+                if(self.overforce_lim > 1e6):
+                    #  only for non-overforce-limited case
+                    if(self.obj.comm.rank == 0):
+                        self.stats.output_dump()
+                        print('saving implicit timestep # ', self.stats.subiteration,
+                            ' with energy = ', self.stats.total_energy,
+                            'avg strain = ', self.stats.strain)
+                    self.obj.muOutput(self.fullit_outputname)
                 break
             if((self.stats.subiteration > 1) and 
                     ((self.stats.subiteration % self.output_n == 0) or
@@ -160,10 +167,6 @@ class simulation():
             else:
                 if(self.obj.comm.rank == 0):
                     statlog.dump(self.stats, self.stats.fname)
-        if (self.stats.stress/self.stats.strain < self.stiffness_end):
-            if(self.obj.comm.rank == 0):
-                print("effective stiffness :", self.stats.stress/self.stats.strain)
-            break
 
     def run_simulation(self):
         self.obj.phi_old = self.obj.phi.array() + 0.0

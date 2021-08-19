@@ -116,30 +116,18 @@ class parallel_fracture():
         return self.comm.allreduce(np.sum(f)*np.prod(self.dx),MPI.SUM)
 
     def max(self,f):
-         return self.comm.allreduce(np.max(f),MPI.MAX)
+         return self.comm.allreduce(np.amax(f,initial=-1e20),MPI.MAX)
     
     def value_at_max(self,f,g):
         maxval = self.max(f)
-        maxg = 0.0
-        maxind = np.argmax(f)
-        maxloc = np.unravel_index(maxind, self.fftengine.nb_subdomain_grid_pts, order='C')
-        if (math.isclose(np.max(f[maxloc]), maxval)):
-            maxg = g[maxloc]
+        maxg = -1e20
+        if (f.size):
+            maxind = np.argmax(f)
+            maxloc = np.unravel_index(maxind, self.fftengine.nb_subdomain_grid_pts, order='C')
+            if (math.isclose(np.max(f[maxloc]), maxval)):
+                maxg = g[maxloc]
         maxg_all = self.max(maxg)
         return maxg_all
-    
-    def argmax(self,f):
-        x = -np.ones(self.dim)
-        maxind = np.argmax(f)
-        maxloc = np.unravel_index(maxind, self.fftengine.nb_subdomain_grid_pts, order='C')
-        maxval = self.max(f)
-        if (math.isclose(np.max(f[maxloc]), maxval)):
-            for i in range(0,self.dim):
-                x[i] = self.fftengine.subdomain_locations[i] + maxloc[i]
-        xall = np.zeros(self.dim)
-        for i in range(0,self.dim):
-            xall[i] = self.max(x[i])
-        return xall
     
     def fracture_energy(self,x):
         return self.Gc/self.bulk.cw*(self.bulk.energy(x) + self.grad2(x))

@@ -71,7 +71,7 @@ class constrainedCG():
             p[mask_bounded] = 0.0
         
         if (comm.rank == 0):  
-            print('CG did not converge after {} iterations.  Current max residual is {}'.format(i+1, rmax)) 
+            print('CG did not converge after {} iterations.  Current residual norm is {}'.format(i+1, rnorm)) 
         self.time = time.time() - start
         self.result = x
         self.n_iterations = i+1

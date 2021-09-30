@@ -13,8 +13,9 @@ import model_components
 import constrainedCG as cCG
 
 class parallel_fracture():
-    def __init__(self, Lx = 10, nx = 63, cfield=None, mechanics_formulation=None, pfmodel=None, Poisson=0.0):
+    def __init__(self, Lx = 10, nx = 63, cfield=None, mechanics_formulation=None, crackset=False, pfmodel=None, Poisson=0.0):
         self.dim = 2
+        self.crackset = crackset  # is irreversibility constraint limited to a crackset with phi>0.9?
         self.lens = [Lx, Lx] #simulation cell lengths
         self.domain_measure = np.array(self.lens).prod()
         self.nb_grid_pts  = [nx, nx] #number of grid points in each spatial direction
@@ -81,17 +82,24 @@ class parallel_fracture():
         verbose = msp.Verbosity.Silent
         solver = msp.solvers.KrylovSolverCG(self.cell, self.solver_CG_tol, self.maxiter_cg, verbose)
         return msp.solvers.newton_cg(self.cell, self.F_tot, solver, self.solver_rel_tol, self.solver_abs_tol, verbose)
-    
+
+    def constraint_field(self):
+        if(self.crackset):
+            constraint = -1e30*np.ones_like(self.phi_old)
+            constraint[self.phi_old > 0.9] = 0
+            return constraint
+        else:
+            return self.phi_old - self.phi.array()
+
     def phi_solver(self):
         Jx = -self.jacobian(self.phi.array())
-        solve = cCG.constrainedCG(Jx, self.hessp, Jx,
-                                 self.phi_old - self.phi.array(), self.comm)
+        solve = cCG.constrainedCG(Jx, self.hessp, Jx, self.constraint_field(), self.comm)
         return solve
-    
+
     def phi_implicit_solver(self):
          Jx = -self.jacobian(self.phi.array()) - (self.phi.array() - self.phi_old)/self.dt
          solve = cCG.constrainedCG(Jx, self.implicit_hessp, Jx,
-                                  self.phi_old - self.phi.array(), self.comm)
+                                  self.constraint_field(), self.comm)
          return solve
     
     def laplacian(self,x):

@@ -62,6 +62,7 @@ def analytical_1D(x):
 
 def find_init(ds, threshhold):
     nx = ds['phi'].shape[1]
+    print(nx)
     for j in range(0,ds['phi'].shape[0]):
         if(np.max(ds['phi'][j,...]) > threshhold):
             startpoint = np.unravel_index(np.argmax(ds['phi'][j,...]),
@@ -69,12 +70,12 @@ def find_init(ds, threshhold):
             break
     print('primary initiation at ', startpoint)
     # experimental bit to find secondary site
-    halfnx = (nx+1)/2
+    halfnx = int((nx+1)/2)
     shift = (halfnx - startpoint[0], halfnx-startpoint[1])
     phi = np.roll(ds['phi'][j,...], shift,axis=(0,1))  + 0.0
     radius = 8
     phi[halfnx-radius:halfnx+radius,halfnx-radius:halfnx+radius] = 0.0
-    secondary = np.argmax(phi)
+    secondary = np.unravel_index(np.argmax(phi),(nx,nx))
     if(phi[secondary] > 0.5):
         print('secondary initiation at ', secondary, ' with phi=',
             phi[secondary])

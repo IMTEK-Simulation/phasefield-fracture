@@ -1,4 +1,5 @@
 import sys
+# append src directory to path
 sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/combined/src")
 import makestruct
 import mechanics
@@ -16,7 +17,8 @@ Lx=20
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx,
         mechanics_formulation=mechanics.anisotropic_tc(),
-        pfmodel=model_components.AT1(),Poisson=0.2)
+        pfmodel=model_components.AT1(),Poisson=0.2,
+        crackset=False)
 
 f.title = 'test'
 

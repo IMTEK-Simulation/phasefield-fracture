@@ -136,17 +136,18 @@ class simulation():
                 print('energy', self.stats.total_energy, 'delta energy = ', self.stats.delta_energy,
                    'delta phi = ', self.stats.delta_phi)
             self.obj.phi_old = self.obj.phi.array() + 0.0
-            if (self.stats.stress/self.stats.strain < self.stiffness_end):
-                if(self.obj.comm.rank == 0):
-                    self.stats.output_dump()
-                    print('saving implicit timestep # ', self.stats.subiteration,
-                        ' with energy = ', self.stats.total_energy,
-                        'avg strain = ', self.stats.strain)
-                self.obj.muOutput(self.fullit_outputname)
             if ((abs(self.stats.delta_phi) < self.delta_phi_tol) and 
                      (self.obj.dt >= self.dt0 )):
                 if(self.overforce_lim > 1e6):
-                    #  only for non-overforce-limited case
+                    #  non-overforce-limited case might need new strain increment
+                    if(self.obj.comm.rank == 0):
+                        self.stats.output_dump()
+                        print('saving implicit timestep # ', self.stats.subiteration,
+                            ' with energy = ', self.stats.total_energy,
+                            'avg strain = ', self.stats.strain)
+                    self.obj.muOutput(self.fullit_outputname)
+                elif (self.stats.stress/self.stats.strain < self.stiffness_end):
+                    # only output once for end of simulation
                     if(self.obj.comm.rank == 0):
                         self.stats.output_dump()
                         print('saving implicit timestep # ', self.stats.subiteration,

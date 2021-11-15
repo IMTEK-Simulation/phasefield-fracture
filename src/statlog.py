@@ -114,7 +114,7 @@ class stats():
             
     def get_stats_elastic(self, obj):
         self.rescale_ratio = 0
-        self.strain =  np.amax(obj.F_tot)
+        self.strain =  max(obj.F_tot[1,1], obj.F_tot[0,0], abs(obj.F_tot[1,0]),abs(obj.F_tot[0,1]) )
         coupling = obj.straineng.array()*obj.interp.energy(obj.phi.array())
         self.avg_coupling = obj.integrate(coupling)/obj.domain_measure
         self.max_coupling_en = obj.max(coupling)
@@ -131,7 +131,7 @@ class stats():
             self.delta_work_energy = 0
             
     def get_stats_rescale(self, obj, ratio):
-        self.strain =  np.amax(obj.F_tot)
+        self.strain =  max(obj.F_tot[1,1], obj.F_tot[0,0], abs(obj.F_tot[1,0]),abs(obj.F_tot[0,1]) )
         self.avg_yy_stress = self.avg_yy_stress*ratio
         self.avg_xy_stress = self.avg_xy_stress*ratio
         self.avg_xx_stress = self.avg_xx_stress*ratio

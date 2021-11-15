@@ -29,12 +29,12 @@ import matplotlib as mpl
 
 def set_mpl_params():
     mpl.style.use('classic')
-#    fm = mpl.font_manager.json_load("/home/fr/fr_fr/fr_wa1005/.cache/matplotlib/fontlist-v330.json")
-#    fm.findfont("Arial", rebuild_if_missing=False)
-    mpl.rcParams["font.size"] = 9
+    fm = mpl.font_manager.json_load("/home/fr/fr_fr/fr_wa1005/.cache/matplotlib/fontlist-v330.json")
+    fm.findfont("Arial", rebuild_if_missing=False)
+    mpl.rcParams["font.size"] = 7.5
     mpl.rcParams["font.sans-serif"] = ["Arial"]
     mpl.rcParams["font.family"] = "sans-serif"
-    mpl.rcParams["figure.figsize"] = 3, 2.25
+    mpl.rcParams["figure.figsize"] = 2.4, 1.8
     mpl.rcParams["figure.dpi"] = 300
     mpl.rcParams["figure.facecolor"] = 'w'
     mpl.rcParams["legend.loc"] = 'upper left'
@@ -85,7 +85,7 @@ def analytical_1D(x):
     analytical[abs(x) < 2] = (1-abs(x[abs(x) < 2])/2)**2
     return analytical
 
-def find_init(ds, threshhold):
+def find_init(ds, threshhold, async=False, async_n=10):
     nx = ds['phi'].shape[1]
     print(nx)
     for j in range(0,ds['phi'].shape[0]):
@@ -101,12 +101,24 @@ def find_init(ds, threshhold):
     radius = 8
     phi[halfnx-radius:halfnx+radius,halfnx-radius:halfnx+radius] = 0.0
     secondary = np.unravel_index(np.argmax(phi),(nx,nx))
-    if(phi[secondary] > 0.5):
-        print('secondary initiation at ', secondary, ' with phi=',
+    secondary_unsh = tuple(np.array(secondary) - np.array(shift))
+    if(phi[secondary] > threshhold):
+        print('secondary initiation at ', secondary_unsh, ' with phi=',
             phi[secondary])
     else:
-        print('no secondary initiation, maximum of phi=', phi[secondary],
-            ' at ', secondary)
-    return startpoint, secondary
-
-
+        print('no simultaneous secondary initiation, maximum of phi=', phi[secondary],
+            ' at ', secondary_unsh)
+    # first experimental bit failed, new bit:
+    if (async is True):
+        for k in range(j+1, j+async_n):
+            phi = np.roll(ds['phi'][k,...], shift,axis=(0,1))  + 0.0
+            phi[halfnx-radius:halfnx+radius,halfnx-radius:halfnx+radius] = 0.0
+            asecondary = np.unravel_index(np.argmax(phi),(nx,nx))
+            if (phi[asecondary] > threshhold):
+                secondary_unsh = tuple(np.array(asecondary) - np.array(shift))
+                print('secondary initiation at ', secondary_unsh, ' with phi=',
+                    phi[asecondary], ' at ',k-j, 'output steps from primary')
+                break
+            else:
+               print('maximum secondary phi=', phi[asecondary], ' at ', k-j, 'output steps from primary')
+    return startpoint, secondary_unsh

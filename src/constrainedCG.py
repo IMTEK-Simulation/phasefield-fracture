@@ -92,7 +92,6 @@ class constrainedCG():
             beta =  comm.allreduce((r*(r - r_old)).sum(),MPI.SUM) / (alpha*denominator_temp) # Vollebregt step 3, modified per Eq. 16
             p_old = p
             p = -r + beta * p_old
-            p[np.logical_not(mask_bounded)] = -r[np.logical_not(mask_bounded)] + beta*p_old[np.logical_not(mask_bounded)]
             p[mask_bounded] = 0.0
         
         if (comm.rank == 0):  

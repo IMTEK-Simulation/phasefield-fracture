@@ -24,7 +24,7 @@
 
 import sys
 # append src directory to path
-sys.path.append("/work/ws/nemo/fr_wa1005-mu_test-0/quasistatic/combined/src")
+sys.path.append("../src")
 import makestruct
 import mechanics
 import model_components

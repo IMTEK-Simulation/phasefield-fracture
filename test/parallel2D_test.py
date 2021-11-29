@@ -40,7 +40,7 @@ nx=63
 Lx=20
 
 f = parallel_fracture.parallel_fracture(Lx=Lx,nx=nx,
-        mechanics_formulation=mechanics.anisotropic_tc(),
+        mechanics_formulation=mechanics.nonvar_both_tc(),
         pfmodel=model_components.AT1(),Poisson=0.2,
         crackset=False)
 
@@ -63,7 +63,7 @@ def init_crack(obj):
 
 f.phi.array()[...] = init_crack(f)
 
-#f.Cx.array()[...] = f.initialize_serial('../noise1023.npy')*f.Young
+f.Cx.array()[...] = f.initialize_serial('teststruct.npy')*f.Young
 f.initialize_material()
 if(f.comm.rank == 0):
     jsonfile = open("runobj.json", mode='w')
@@ -75,7 +75,8 @@ sim = simulation.simulation(f, time_dependent=True)
 sim.overforce_lim=2
 sim.strain_step_scalar = 0.0001
 sim.min_its = 10
-sim.strain_step_tensor = np.array([[0,0],[0,1]])
+sim.strain_step_tensor = np.array([[0,0.5],[0.5,0.0]])
+f.F_tot = sim.strain_step_tensor*sim.strain_step_scalar
 sim.run_simulation()
 endt = time.time()
 

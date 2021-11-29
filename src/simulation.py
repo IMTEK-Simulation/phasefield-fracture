@@ -198,7 +198,6 @@ class simulation():
         phi_solve = self.obj.phi_solver()
         self.obj.phi.array()[...] += phi_solve.result
         self.obj.phi_old = self.obj.phi.array() + 0.0
-        self.obj.F_tot = self.strain_step_scalar*self.strain_step_tensor
         self.obj.muOutput(self.fullit_outputname,new=True)
         if (self.time_dependent == False):
             self.obj.muOutput(self.subit_outputname,new=True)

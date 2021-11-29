@@ -290,8 +290,9 @@ class nonvar_both_tc():
             trace = 0.0
             for k in range(0,obj.dim):
                 trace += strain[k,k]
-            elastic_energy[tuple(pixel)] += Cxval*(np.maximum(trace,0)**2*
-                K_factor*0.5 + np.sum((strain-np.eye(obj.dim)*trace/3)**2)*mu_factor)
+            elastic_energy[tuple(pixel)] += (Cxval*(np.maximum(trace,0)**2*
+                K_factor*0.5 + np.sum((strain-np.eye(obj.dim)*trace/3)**2)*
+                mu_factor))*obj.interp.energy(obj.phi.array()[pixel[0],pixel[1]])
             elastic_energy[tuple(pixel)] += Cxval*(np.minimum(trace,0)**2*K_factor*0.5)
         return elastic_energy
 
@@ -331,14 +332,16 @@ class nonvar_phi_vd():
     def get_elastic_energy(self,obj):
         lamb_factor = obj.Poisson/(1+obj.Poisson)/(1-2*obj.Poisson)
         mu_factor = 1/2/(1+obj.Poisson)
+        K_factor = lamb_factor + 2/3*mu_factor
         elastic_energy = np.zeros_like(obj.straineng.array())
         for pixel, Cxval in np.ndenumerate(obj.Cx.array()):
             pixel_id = np.ravel_multi_index(pixel, obj.fftengine.nb_subdomain_grid_pts, order='F')
             strain = np.reshape(obj.strain.array()[:,0,pixel[0],pixel[1]],(obj.dim,obj.dim))
-            pstrains = np.linalg.eigvalsh(strain)
-            elastic_energy[tuple(pixel)] += Cxval*(np.minimum(np.sum(pstrains),0)**2*lamb_factor*0.5 +
-                np.sum(np.minimum(pstrains,0)**2)*mu_factor)
-            elastic_energy[tuple(pixel)] += Cxval*(np.maximum(np.sum(pstrains),0)**2*lamb_factor*0.5 +
-                np.sum(np.maximum(pstrains,0)**2)*mu_factor)*obj.interp.energy(obj.phi.array()[pixel[0],pixel[1]])
+            trace = 0.0
+            for k in range(0,obj.dim):
+                trace += strain[k,k]
+            elastic_energy[tuple(pixel)] += (Cxval*(np.maximum(trace,0)**2*
+                K_factor*0.5 + np.sum((strain-np.eye(obj.dim)*trace/3)**2)*
+                mu_factor))*obj.interp.energy(obj.phi.array()[pixel[0],pixel[1]])
+            elastic_energy[tuple(pixel)] += Cxval*(np.minimum(trace,0)**2*K_factor*0.5)
         return elastic_energy
-
